@@ -1,0 +1,29 @@
+import Link from "next/link"
+import { ShieldX } from "lucide-react"
+
+import { ErrorState } from "@/components/error/error-state"
+import { Button } from "@/components/ui/button"
+
+/**
+ * Rendered when a Server Component calls `forbidden()` — the user is signed in,
+ * but their role doesn't cover this screen. Distinct from 401 on purpose:
+ * telling someone to sign in again when they're already signed in sends them
+ * round a loop that can never succeed.
+ */
+export default function Forbidden() {
+  return (
+    <ErrorState
+      code="403"
+      icon={ShieldX}
+      title="You don't have access to this"
+      description="Your role doesn't include permission for this area. If you need it for your work, your administrator can grant it."
+    >
+      <Button size="lg" render={<Link href="/dashboard" />}>
+        Go to dashboard
+      </Button>
+      <Button variant="outline" size="lg" render={<Link href="/support" />}>
+        Request access
+      </Button>
+    </ErrorState>
+  )
+}
