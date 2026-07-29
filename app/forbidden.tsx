@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ShieldX } from "lucide-react"
 
-import { ErrorState } from "@/components/error/error-state"
+import { ErrorState } from "@/components/error/errorState"
 import { Button } from "@/components/ui/button"
 
 /**

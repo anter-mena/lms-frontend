@@ -1,24 +1,18 @@
-import { Navbar } from "@/components/layout/navbar"
-import { NavPanel } from "@/components/layout/nav-panel"
-import { NavRail } from "@/components/layout/nav-rail"
+import { AppShell } from "@/components/layout/appShell"
 
 /**
- * App shell: full-width navbar on top, then an icon rail, a contextual nav
- * panel, and the content area side by side beneath it.
+ * Shell for signed-in pages. The markup and the sidebar's open/closed state
+ * live in AppShell, which has to be a Client Component; keeping this
+ * layout on the server means `children` are still server-rendered.
+ *
+ * Worth knowing when building here: nothing in this layout guards the route.
+ * Each page under it does its own auth check, because a layout cannot read the
+ * request and is not re-rendered on navigation.
  */
 export default function AppLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return (
-    <div className="flex min-h-svh flex-col">
-      <Navbar />
-      <div className="flex flex-1">
-        <NavRail />
-        <NavPanel />
-        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
-      </div>
-    </div>
-  )
+  return <AppShell>{children}</AppShell>
 }

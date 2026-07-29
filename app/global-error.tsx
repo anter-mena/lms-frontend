@@ -2,7 +2,7 @@
 
 import { RotateCw, ServerCrash } from "lucide-react"
 
-import { ErrorState } from "@/components/error/error-state"
+import { ErrorState } from "@/components/error/errorState"
 import { Button } from "@/components/ui/button"
 
 // This file replaces the root layout when it renders, so it has to pull in
@@ -25,7 +25,7 @@ export default function GlobalError({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-background text-foreground">
-        <title>Something went wrong · Lumen</title>
+        <title>Something went wrong · Norden Capital</title>
 
         <ErrorState
           code="500"

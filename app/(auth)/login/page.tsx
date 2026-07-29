@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
+import Link from "next/link"
+import { GalleryVerticalEnd } from "lucide-react"
 
-import { LoginForm } from "@/components/login/login-form"
-import { SsoButtons } from "@/components/login/sso-buttons"
-import { FieldSeparator } from "@/components/ui/field"
+import { LoginForm } from "@/components/login/loginForm"
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -10,23 +10,38 @@ export const metadata: Metadata = {
 
 /**
  * Sign-in screen. `/` redirects here — this is an internal platform, so there
- * is no public landing page in front of it.
+ * is no public landing page in front of it, and nothing on this page links
+ * "back home".
  */
 export default function LoginPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Sign in to your account
+    <div className="mx-auto flex w-full max-w-xs flex-col gap-4">
+      <div className="flex flex-col items-center gap-2 text-center">
+        {/* Decorative: aria-hidden because the h1 right below already names the
+            company, so announcing it again would just be noise. Not a link —
+            there is no home page to point it at. The border is what makes the
+            card read in light mode, where --card and --background are both
+            white; in dark mode the fill carries it on its own. */}
+        <div className="mb-1 flex size-9 items-center justify-center rounded-lg border bg-card shadow-sm">
+          <GalleryVerticalEnd className="size-4" aria-hidden />
+        </div>
+        <h1 className="font-heading text-lg font-bold tracking-tight text-balance">
+          Welcome to Norden Capital
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Pick up where you left off in your courses.
+        {/* Where a consumer product would put "Don't have an account? Sign up".
+            Accounts here are provisioned internally, so the only dead end worth
+            catching is someone who already has one and can't get in. */}
+        <p className="text-xs text-muted-foreground">
+          Can&apos;t access your account?
+          <br />
+          <Link
+            href="/support"
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            Contact IT support
+          </Link>
         </p>
       </div>
-
-      <SsoButtons />
-
-      <FieldSeparator>or sign in with email</FieldSeparator>
 
       <LoginForm />
     </div>
