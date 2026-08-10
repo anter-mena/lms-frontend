@@ -33,11 +33,11 @@ export default function AuthLayout({
                 announcing both would double up. Hidden below lg to keep the
                 stacked mobile footer uncluttered. */}
             <Link
-              href="/support"
+              href="/help-center"
               className="flex items-center gap-1 underline-offset-4 hover:text-foreground hover:underline"
             >
               <LifeBuoy className="hidden size-3 lg:block" aria-hidden />
-              Support
+              Help Center
             </Link>
           </div>
 

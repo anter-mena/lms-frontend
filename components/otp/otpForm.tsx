@@ -1,8 +1,13 @@
+"use client"
+
 import Link from "next/link"
+import { useActionState, useState } from "react"
 import { ArrowLeft, ShieldCheck } from "lucide-react"
 
+import { verifyOtp, type OtpState } from "@/app/(auth)/otp/actions"
 import { Button } from "@/components/ui/button"
-import { FieldDescription } from "@/components/ui/field"
+import { FieldDescription, FieldError } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import {
   InputOTP,
   InputOTPGroup,
@@ -15,7 +20,15 @@ import {
 // digits comfortable without overflowing it.
 const SLOT_CLASS = "size-10 rounded-lg border text-base"
 
+const initialState: OtpState = {}
+
 function OtpForm() {
+  const [state, formAction, pending] = useActionState(verifyOtp, initialState)
+  // Which factor is on screen. Client state, not a route: it is a way of
+  // answering the same challenge, not a different step, so putting it in the
+  // URL would let someone land straight on it without a challenge open.
+  const [useRecovery, setUseRecovery] = useState(false)
+
   return (
     <div className="mx-auto flex w-full max-w-xs flex-col gap-4">
       <div className="flex flex-col items-center gap-2 text-center">
@@ -26,43 +39,120 @@ function OtpForm() {
           Two-factor authentication
         </h1>
         <p className="text-xs text-muted-foreground">
-          Open your authenticator app and enter the 6-digit code for Norden
-          Capital.
+          {useRecovery
+            ? "Enter one of the recovery codes you saved when you set up two-factor authentication."
+            : "Open your authenticator app and enter the 6-digit code for Norden Capital."}
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <InputOTP maxLength={6} containerClassName="justify-between gap-2">
-          <InputOTPGroup className="gap-2">
-            <InputOTPSlot index={0} className={SLOT_CLASS} />
-            <InputOTPSlot index={1} className={SLOT_CLASS} />
-            <InputOTPSlot index={2} className={SLOT_CLASS} />
-          </InputOTPGroup>
-          <InputOTPSeparator />
-          <InputOTPGroup className="gap-2">
-            <InputOTPSlot index={3} className={SLOT_CLASS} />
-            <InputOTPSlot index={4} className={SLOT_CLASS} />
-            <InputOTPSlot index={5} className={SLOT_CLASS} />
-          </InputOTPGroup>
-        </InputOTP>
+      <form action={formAction} className="flex flex-col gap-3">
+        {/* The backend's own wording, passed through unchanged: it tells an
+            expired challenge apart from a wrong code apart from a locked
+            account, and each needs a different reaction from the reader. */}
+        {state.message ? (
+          <p
+            role="alert"
+            aria-live="polite"
+            className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {state.message}
+          </p>
+        ) : null}
 
-        <Button className="w-full" render={<Link href="/dashboard" />}>
-          Verify and continue
+        {useRecovery ? (
+          <>
+            {/* Tells the action which factor to expect. Without it, an empty
+                submit would be reported as a missing 6-digit code. */}
+            <input type="hidden" name="mode" value="recovery" />
+            <Input
+              name="recoveryCode"
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="ABCDE-12345"
+              disabled={pending}
+              aria-invalid={Boolean(state.fieldErrors?.recoveryCode)}
+              // uppercase is display only — CSS cannot change the submitted
+              // value, so the action normalises it again server-side.
+              className="h-10 text-center font-mono tracking-widest uppercase placeholder:normal-case placeholder:tracking-normal"
+            />
+          </>
+        ) : (
+          /* name="code" is what puts the digits into FormData — input-otp
+             spreads its props onto the real <input> it renders behind the
+             slots. Without it the action receives an empty body. */
+          <InputOTP
+            name="code"
+            maxLength={6}
+            disabled={pending}
+            autoFocus
+            aria-invalid={Boolean(state.fieldErrors?.code)}
+            containerClassName="justify-between gap-2"
+          >
+            <InputOTPGroup className="gap-2">
+              <InputOTPSlot index={0} className={SLOT_CLASS} />
+              <InputOTPSlot index={1} className={SLOT_CLASS} />
+              <InputOTPSlot index={2} className={SLOT_CLASS} />
+            </InputOTPGroup>
+            <InputOTPSeparator />
+            <InputOTPGroup className="gap-2">
+              <InputOTPSlot index={3} className={SLOT_CLASS} />
+              <InputOTPSlot index={4} className={SLOT_CLASS} />
+              <InputOTPSlot index={5} className={SLOT_CLASS} />
+            </InputOTPGroup>
+          </InputOTP>
+        )}
+
+        {/* Keyed per field, so switching factors never shows the other one's
+            error — only the general banner above persists across a toggle. */}
+        {state.fieldErrors?.code && !useRecovery ? (
+          <FieldError>{state.fieldErrors.code}</FieldError>
+        ) : null}
+        {state.fieldErrors?.recoveryCode && useRecovery ? (
+          <FieldError>{state.fieldErrors.recoveryCode}</FieldError>
+        ) : null}
+
+        <Button type="submit" className="w-full" disabled={pending}>
+          {pending ? "Verifying…" : "Verify and continue"}
         </Button>
-      </div>
+      </form>
 
       {/* No "resend", no "use a different email": a TOTP code is generated on
           the device and rotates on its own, so there is nothing for the server
-          to send again. Losing the device is the real dead end here. */}
+          to send again. Losing the device is what recovery codes are for.
+          No support link here either — the auth layout's footer already carries
+          one on every screen in this flow. */}
       <div className="flex flex-col gap-2">
         <FieldDescription className="text-center">
-          Your code changes every 30 seconds.
+          {useRecovery
+            ? "Each recovery code works once, then stops."
+            : "Your code changes every 30 seconds."}
         </FieldDescription>
+
         <FieldDescription className="text-center">
-          Lost access to your device?{" "}
-          <Link href="/support" className="text-foreground">
-            Contact IT support
-          </Link>
+          {useRecovery ? (
+            <>
+              Got your phone back?{" "}
+              <button
+                type="button"
+                onClick={() => setUseRecovery(false)}
+                className="text-foreground underline underline-offset-4 hover:text-primary"
+              >
+                Use your authenticator app
+              </button>
+            </>
+          ) : (
+            <>
+              Lost access to your device?{" "}
+              <button
+                type="button"
+                onClick={() => setUseRecovery(true)}
+                className="text-foreground underline underline-offset-4 hover:text-primary"
+              >
+                Use a recovery code
+              </button>
+            </>
+          )}
         </FieldDescription>
       </div>
 

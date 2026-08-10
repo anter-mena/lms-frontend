@@ -3,7 +3,7 @@
 import { Fragment } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bell } from "lucide-react"
+import { Bell, Inbox } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -72,6 +72,8 @@ function AppNavbar({ leading }: { leading?: React.ReactNode }) {
       </Breadcrumb>
 
       <div className="ml-auto flex items-center gap-2">
+        {/* Both buttons are deliberately identical — they are peers, and any
+            divergence would read as one of them meaning something different. */}
         <Button
           variant="outline"
           size="icon"
@@ -81,6 +83,16 @@ function AppNavbar({ leading }: { leading?: React.ReactNode }) {
           <LiquidGlassLayers />
           {/* relative so the icon paints above the glass layers */}
           <Bell className="relative" />
+        </Button>
+
+        <Button
+          variant="outline"
+          size="icon"
+          className="relative overflow-hidden bg-card"
+          aria-label="Inbox"
+        >
+          <LiquidGlassLayers />
+          <Inbox className="relative" />
         </Button>
 
         {/* Squared off rather than a circle. rounded has to be overridden in

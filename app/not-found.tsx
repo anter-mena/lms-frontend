@@ -19,7 +19,7 @@ export default function NotFound() {
       <Button size="lg" render={<Link href="/dashboard" />}>
         Go to dashboard
       </Button>
-      <Button variant="outline" size="lg" render={<Link href="/support" />}>
+      <Button variant="outline" size="lg" render={<Link href="/help-center" />}>
         Contact IT support
       </Button>
     </ErrorState>

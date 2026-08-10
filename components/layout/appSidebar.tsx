@@ -50,8 +50,13 @@ const ROW =
   "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors"
 // fill-current overrides lucide's own fill="none" — a CSS rule outranks an SVG
 // presentation attribute, so there is no need to pass fill through as a prop.
+//
+// Scoped to the direct first child, not `[&_svg]`: a descendant selector also
+// catches the ChevronDown ending a collapsible trigger, and that icon is a
+// stroked "v" — filling it renders a solid wedge instead of an arrow. The
+// leading icon is the first element in both a plain link and a trigger.
 const ROW_ACTIVE =
-  "bg-white font-medium text-foreground shadow-sm [&_svg]:fill-current"
+  "bg-white font-medium text-foreground shadow-sm [&>svg:first-child]:fill-current"
 const ROW_IDLE = "text-muted-foreground hover:text-foreground"
 
 /**

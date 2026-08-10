@@ -3,6 +3,7 @@ import Link from "next/link"
 import { GalleryVerticalEnd } from "lucide-react"
 
 import { LoginForm } from "@/components/login/loginForm"
+import { redirectIfAuthenticated } from "@/lib/auth"
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -13,7 +14,12 @@ export const metadata: Metadata = {
  * is no public landing page in front of it, and nothing on this page links
  * "back home".
  */
-export default function LoginPage() {
+export default async function LoginPage() {
+  // Someone already signed in has no use for this form. A stale cookie falls
+  // through to it rather than bouncing, which is what stops this and
+  // /dashboard redirecting at each other forever.
+  await redirectIfAuthenticated()
+
   return (
     <div className="mx-auto flex w-full max-w-xs flex-col gap-4">
       <div className="flex flex-col items-center gap-2 text-center">
@@ -35,7 +41,7 @@ export default function LoginPage() {
           Can&apos;t access your account?
           <br />
           <Link
-            href="/support"
+            href="/help-center"
             className="underline underline-offset-4 hover:text-foreground"
           >
             Contact IT support
