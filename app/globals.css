@@ -119,6 +119,59 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* The loading indicator. Declared here rather than inline because Tailwind's
+   arbitrary animation syntax can reference a named keyframe but cannot declare
+   one, and a @keyframes block inside a component would be duplicated per render
+   tree. */
+@keyframes pixel-pulse {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The grid breathing: the gap itself widens and closes, so the whole block
+   expands and contracts around its centre while the squares light up inside it.
+   One rhythm per size, because `gap` takes a length and there is no way to
+   express "half again as much" in a keyframe.
+
+   Animating `gap` re-runs layout every frame, which would matter for a large
+   grid. Nine spans of a few pixels each is not a large grid. */
+@keyframes pixel-breathe-sm {
+  0%,
+  100% {
+    gap: 3px;
+  }
+  50% {
+    gap: 6px;
+  }
+}
+
+@keyframes pixel-breathe-md {
+  0%,
+  100% {
+    gap: 4px;
+  }
+  50% {
+    gap: 8px;
+  }
+}
+
+@keyframes pixel-breathe-lg {
+  0%,
+  100% {
+    gap: 4px;
+  }
+  50% {
+    gap: 9px;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

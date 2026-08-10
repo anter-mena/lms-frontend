@@ -1,8 +1,16 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useActionState, useState } from "react"
-import { Check, Copy, KeyRound, ShieldAlert, Smartphone } from "lucide-react"
+import { useActionState, useRef, useState } from "react"
+import {
+  Check,
+  Copy,
+  KeyRound,
+  ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+} from "lucide-react"
 
 import { logout } from "@/app/(app)/actions"
 import {
@@ -43,7 +51,13 @@ const SLOT_CLASS = "size-10 rounded-lg border text-base"
  * has not enrolled cannot use the sidebar (every link is forbidden until they
  * do), so this same component gets mounted on a bare `(auth)` route.
  */
-function TwoFactorSetupFlow({ email }: { email: string }) {
+function TwoFactorSetupFlow({
+  email,
+  alreadyEnrolled,
+}: {
+  email: string
+  alreadyEnrolled: boolean
+}) {
   const [setupState, startAction, startPending] = useActionState(
     startSetup,
     initialSetupState
@@ -53,8 +67,19 @@ function TwoFactorSetupFlow({ email }: { email: string }) {
     initialConfirmState
   )
 
+  // Checked before anything else, and that ordering is the whole point.
+  // Succeeding at enrolment re-renders the page with `alreadyEnrolled` true; if
+  // that were tested first, the codes would vanish at the exact moment they were
+  // produced — and they exist nowhere else, ever.
   if (confirmState.recoveryCodes) {
     return <RecoveryCodesStep codes={confirmState.recoveryCodes} email={email} />
+  }
+
+  // Arrived here with 2FA already on, without going through the flow. Nothing to
+  // do: /2fa/setup answers 409, so offering the button would only produce an
+  // error. A dead end deserves a door, not a bounce.
+  if (alreadyEnrolled) {
+    return <AlreadyEnrolled />
   }
 
   if (setupState.secret && setupState.qrCodeImage) {
@@ -76,6 +101,30 @@ function TwoFactorSetupFlow({ email }: { email: string }) {
       message={setupState.message}
       email={email}
     />
+  )
+}
+
+/** Reached only by navigating here directly with 2FA already switched on. */
+function AlreadyEnrolled() {
+  return (
+    <Shell>
+      <header className="flex flex-col gap-1">
+        <div className="mb-2 flex size-9 items-center justify-center rounded-lg border bg-card shadow-sm">
+          <ShieldCheck className="size-4" aria-hidden />
+        </div>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          Two-factor authentication is already on
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Nothing to set up. Signing in already asks for a code from your
+          authenticator app.
+        </p>
+      </header>
+
+      <div>
+        <Button render={<Link href="/dashboard" />}>Continue to the app</Button>
+      </div>
+    </Shell>
   )
 }
 
@@ -173,6 +222,8 @@ function ScanStep({
   pending: boolean
   state: ConfirmState
 }) {
+  const formRef = useRef<HTMLFormElement>(null)
+
   return (
     <Shell>
       <header className="flex flex-col gap-1">
@@ -203,6 +254,7 @@ function ScanStep({
           user has their app open and a code in front of them, and a separate
           route would remount this component and throw the secret away. */}
       <form
+        ref={formRef}
         action={formAction}
         className="flex flex-col gap-3 border-t pt-5"
       >
@@ -218,11 +270,18 @@ function ScanStep({
 
         {state.message ? <ErrorBanner>{state.message}</ErrorBanner> : null}
 
+        {/* Submits itself on the sixth digit. A TOTP code lives about 30
+            seconds, so making someone reach for a button after typing it is a
+            real chance of it expiring between the typing and the clicking.
+            Guarded on `pending` so a stray re-fire cannot double-submit. */}
         <InputOTP
           name="code"
           maxLength={6}
           disabled={pending}
           autoFocus
+          onComplete={() => {
+            if (!pending) formRef.current?.requestSubmit()
+          }}
           aria-invalid={Boolean(state.fieldErrors?.code)}
           containerClassName="gap-2"
         >
@@ -336,11 +395,16 @@ function RecoveryCodesStep({
   const [saved, setSaved] = useState(false)
 
   function finish() {
-    // refresh() first so the security page re-runs requireUser() and reports
-    // two-factor as on; without it the row could paint from a cached payload
-    // taken before enrolment.
+    // The app, not the security settings page. Enrolment used to live inside
+    // Settings, so finishing returned you to where you had come from. It is a
+    // mandatory gate now — this person has never seen Settings and did not
+    // choose to be here. What they wanted was the app, and this is the first
+    // moment they are allowed into it.
+    //
+    // refresh() first so the destination re-reads the user with the new token
+    // rather than painting from a payload fetched while 2FA was still off.
     router.refresh()
-    router.push("/settings/security")
+    router.push("/dashboard")
   }
 
   return (

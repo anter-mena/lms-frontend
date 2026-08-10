@@ -105,24 +105,25 @@ export async function redirectIfAuthenticated() {
 }
 
 /**
- * For the enrolment screen itself — the mirror of {@link requireUser}.
+ * Signed in, enrolled or not. For the enrolment screen alone.
  *
- * <p>Signed out goes to the sign-in form. Already enrolled goes to the app,
- * because there is nothing here for them: `/2fa/setup` answers 409 once 2FA is
- * on, so the screen could only offer a flow that cannot complete.
+ * <p><b>Deliberately does not redirect people who already have 2FA on</b>, and
+ * that is not an oversight. Finishing enrolment writes a new session cookie, and
+ * a Server Action that writes a cookie makes Next re-render the page it was
+ * called from. A check here for "2FA is on now, off you go" would therefore fire
+ * the instant enrolment succeeded — throwing away the recovery codes screen
+ * before it ever painted, and with it the only copy of those codes that will
+ * ever exist.
  *
- * <p>Only somebody signed in and not yet enrolled belongs here, and for them
- * this is the one page in the application that works.
+ * <p>So the decision moves into the client component, which is the only thing
+ * that knows whether it is mid-flow. Someone who wanders here already enrolled
+ * is shown a dead end and a way out, rather than being bounced.
  */
-export async function requireEnrolment(): Promise<SessionUser> {
+export async function requireSignedIn(): Promise<SessionUser> {
   const result = await loadUser()
 
   if (!result) redirect("/login")
-
-  if (result.ok) {
-    if (result.data.mfaEnabled) redirect("/dashboard")
-    return result.data
-  }
+  if (result.ok) return result.data
 
   if (result.error.status === 401 || result.error.status === 403) {
     redirect("/login?reason=session-expired")

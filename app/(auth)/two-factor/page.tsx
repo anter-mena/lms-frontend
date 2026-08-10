@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 import { TwoFactorSetupFlow } from "@/components/twoFactor/setupFlow"
-import { requireEnrolment } from "@/lib/auth"
+import { requireSignedIn } from "@/lib/auth"
 
 export const metadata: Metadata = {
   title: "Two-factor authentication required",
@@ -21,9 +21,16 @@ export const metadata: Metadata = {
  * an app that silently does nothing.
  */
 export default async function TwoFactorPage() {
-  const user = await requireEnrolment()
+  const user = await requireSignedIn()
 
-  // Passed down only so the downloaded recovery-code file names the account it
+  // `alreadyEnrolled` is read once, when the page first renders. That matters:
+  // finishing enrolment re-renders this page with it now true, and the component
+  // must keep showing the recovery codes rather than react to it. Only the
+  // client knows whether it is mid-flow, so only the client may decide.
+  //
+  // `email` is passed so the downloaded recovery-code file names the account it
   // belongs to — people end up with several of these.
-  return <TwoFactorSetupFlow email={user.email} />
+  return (
+    <TwoFactorSetupFlow email={user.email} alreadyEnrolled={user.mfaEnabled} />
+  )
 }

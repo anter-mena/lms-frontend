@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useRef, useState } from "react"
 import { ArrowLeft, ShieldCheck } from "lucide-react"
 
 import {
@@ -31,6 +31,7 @@ function OtpForm() {
   // answering the same challenge, not a different step, so putting it in the
   // URL would let someone land straight on it without a challenge open.
   const [useRecovery, setUseRecovery] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   return (
     <div className="mx-auto flex w-full max-w-xs flex-col gap-4">
@@ -48,7 +49,7 @@ function OtpForm() {
         </p>
       </div>
 
-      <form action={formAction} className="flex flex-col gap-3">
+      <form ref={formRef} action={formAction} className="flex flex-col gap-3">
         {/* The backend's own wording, passed through unchanged: it tells an
             expired challenge apart from a wrong code apart from a locked
             account, and each needs a different reaction from the reader. */}
@@ -84,11 +85,19 @@ function OtpForm() {
           /* name="code" is what puts the digits into FormData — input-otp
              spreads its props onto the real <input> it renders behind the
              slots. Without it the action receives an empty body. */
+          /* Submits itself on the sixth digit. The code rotates every 30
+             seconds, so a button press between typing and sending is a real
+             chance of it expiring on the way. Guarded on `pending` so a stray
+             re-fire cannot double-submit — and a failed attempt costs one of the
+             five tries before the account locks. */
           <InputOTP
             name="code"
             maxLength={6}
             disabled={pending}
             autoFocus
+            onComplete={() => {
+              if (!pending) formRef.current?.requestSubmit()
+            }}
             aria-invalid={Boolean(state.fieldErrors?.code)}
             containerClassName="justify-between gap-2"
           >
