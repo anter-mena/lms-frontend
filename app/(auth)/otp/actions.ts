@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation"
 
 import { apiFetch } from "@/lib/api"
-import { createSession, getMfaToken } from "@/lib/session"
+import { clearMfaChallenge, createSession, getMfaToken } from "@/lib/session"
 
 /** Mirrors the backend's LoginResponse — the same shape step one returns. */
 type LoginResponse = {
@@ -16,6 +16,26 @@ type LoginResponse = {
 export type OtpState = {
   message?: string
   fieldErrors?: Record<string, string>
+}
+
+/**
+ * Gives up on this login and returns to the sign-in form.
+ *
+ * <p>The commonest mistake at this point is being in the wrong account — the
+ * browser filled in another address, or it is a shared machine. Every large
+ * provider puts an exit here for exactly that reason, and leaving it out turns a
+ * mistyped email into "clear your cookies to escape".
+ *
+ * <p>An action rather than a link, because only the server may delete the cookie.
+ * Middleware clears it too, for anyone arriving at `/login` by the Back button or
+ * by typing the address — this covers the deliberate press.
+ */
+export async function signInWithAnotherEmail() {
+  await clearMfaChallenge()
+  // The reason travels in the URL rather than a toast: it has to survive a
+  // redirect and a fresh page render, and it should still be there if the
+  // person reloads while wondering what happened.
+  redirect("/login?reason=cancelled")
 }
 
 /**
@@ -35,7 +55,9 @@ export async function verifyOtp(
   // to the password step rather than showing a form that cannot succeed.
   const mfaToken = await getMfaToken()
   if (!mfaToken) {
-    redirect("/login")
+    // Landing on a bare sign-in form after carefully typing six digits is
+    // baffling. Say what happened.
+    redirect("/login?reason=expired")
   }
 
   // Which factor the form was showing, sent as a hidden field. Inferring it

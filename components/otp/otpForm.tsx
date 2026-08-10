@@ -1,10 +1,13 @@
 "use client"
 
-import Link from "next/link"
 import { useActionState, useState } from "react"
 import { ArrowLeft, ShieldCheck } from "lucide-react"
 
-import { verifyOtp, type OtpState } from "@/app/(auth)/otp/actions"
+import {
+  signInWithAnotherEmail,
+  verifyOtp,
+  type OtpState,
+} from "@/app/(auth)/otp/actions"
 import { Button } from "@/components/ui/button"
 import { FieldDescription, FieldError } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -156,15 +159,17 @@ function OtpForm() {
         </FieldDescription>
       </div>
 
-      <p className="text-center text-xs">
-        <Link
-          href="/login"
+      {/* A form, not a link: leaving has to tear up the half-finished login, and
+          only the server may delete that cookie. */}
+      <form action={signInWithAnotherEmail} className="text-center text-xs">
+        <button
+          type="submit"
           className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-3" aria-hidden />
-          Back to sign in
-        </Link>
-      </p>
+          Sign in with another email
+        </button>
+      </form>
     </div>
   )
 }

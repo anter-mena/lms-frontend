@@ -1,6 +1,7 @@
 "use server"
 
 import { apiFetch } from "@/lib/api"
+import { createSession } from "@/lib/session"
 
 /** Mirrors the backend's MfaSetupResponse. */
 type MfaSetupResponse = {
@@ -12,6 +13,9 @@ type MfaSetupResponse = {
 type MfaConfirmResponse = {
   message: string
   recoveryCodes: string[]
+  /** Present only on enrolment: the full-access token replacing the restricted one. */
+  accessToken?: string
+  expiresInSeconds?: number
 }
 
 export type SetupState = {
@@ -99,6 +103,21 @@ export async function confirmSetup(
       message: result.error.message,
       fieldErrors: result.error.fieldErrors,
     }
+  }
+
+  // The moment the gate opens.
+  //
+  // Until this line the session cookie held an enrolment-pending token, good for
+  // nothing but this flow. A JWT cannot be altered after it is issued, so the
+  // backend mints a fresh one and hands it back here. Failing to store it would
+  // leave someone who has just successfully enrolled still holding the
+  // restricted token — locked out, with the enrolment endpoints now answering
+  // "already enabled", and no way forward except logging out and back in.
+  if (result.data.accessToken) {
+    await createSession(
+      result.data.accessToken,
+      result.data.expiresInSeconds ?? 60 * 60 * 24
+    )
   }
 
   return { recoveryCodes: result.data.recoveryCodes }

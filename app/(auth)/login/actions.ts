@@ -8,6 +8,8 @@ import { createMfaChallenge, createSession } from "@/lib/session"
 /** Mirrors the backend's LoginResponse. */
 type LoginResponse = {
   mfaRequired: boolean
+  /** Password was right, but this account has no second factor yet. */
+  enrolmentRequired?: boolean
   mfaToken?: string
   accessToken?: string
   expiresInSeconds?: number
@@ -63,5 +65,16 @@ export async function login(
   }
 
   await createSession(data.accessToken, data.expiresInSeconds ?? 60 * 60 * 24)
+
+  // The token just stored is an enrolment-pending one: authorised for nothing
+  // beyond setting up 2FA. Sending them to the dashboard would render an app
+  // where every action is refused and nothing says why.
+  //
+  // The token is what actually restricts them — this only decides where they
+  // land. Skipping it would not grant anyone a thing.
+  if (data.enrolmentRequired) {
+    redirect("/two-factor")
+  }
+
   redirect("/dashboard")
 }

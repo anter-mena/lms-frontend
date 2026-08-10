@@ -59,11 +59,24 @@ const loadUser = cache(async (): Promise<ApiResult<SessionUser> | null> => {
 export async function requireUser(): Promise<SessionUser> {
   const result = await loadUser()
 
+  // No cookie at all — they were never signed in, so there is nothing to explain.
+  // Saying "your session expired" to someone who just opened the app is noise.
   if (!result) redirect("/login")
-  if (result.ok) return result.data
 
+  if (result.ok) {
+    // Two-factor is mandatory for every role, so an account without it cannot
+    // use any of this. The backend already refuses their token everywhere except
+    // enrolment; this is what turns those refusals into somewhere to go rather
+    // than a page full of silent failures.
+    if (!result.data.mfaEnabled) redirect("/two-factor")
+    return result.data
+  }
+
+  // A cookie that the backend rejected is different: they *were* signed in and
+  // have been thrown out mid-task. Without a word, the app looks like it forgot
+  // them for no reason.
   if (result.error.status === 401 || result.error.status === 403) {
-    redirect("/login")
+    redirect("/login?reason=session-expired")
   }
 
   throw new Error(`Could not load the signed-in user: ${result.error.message}`)
@@ -83,5 +96,37 @@ export async function requireUser(): Promise<SessionUser> {
  */
 export async function redirectIfAuthenticated() {
   const result = await loadUser()
-  if (result?.ok) redirect("/dashboard")
+  if (!result?.ok) return
+
+  // Straight to enrolment rather than bouncing off /dashboard on the way. The
+  // destination is the same either way; this just spares them a redirect they
+  // would briefly see in the address bar.
+  redirect(result.data.mfaEnabled ? "/dashboard" : "/two-factor")
+}
+
+/**
+ * For the enrolment screen itself — the mirror of {@link requireUser}.
+ *
+ * <p>Signed out goes to the sign-in form. Already enrolled goes to the app,
+ * because there is nothing here for them: `/2fa/setup` answers 409 once 2FA is
+ * on, so the screen could only offer a flow that cannot complete.
+ *
+ * <p>Only somebody signed in and not yet enrolled belongs here, and for them
+ * this is the one page in the application that works.
+ */
+export async function requireEnrolment(): Promise<SessionUser> {
+  const result = await loadUser()
+
+  if (!result) redirect("/login")
+
+  if (result.ok) {
+    if (result.data.mfaEnabled) redirect("/dashboard")
+    return result.data
+  }
+
+  if (result.error.status === 401 || result.error.status === 403) {
+    redirect("/login?reason=session-expired")
+  }
+
+  throw new Error(`Could not load the signed-in user: ${result.error.message}`)
 }

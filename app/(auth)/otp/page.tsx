@@ -26,7 +26,7 @@ export default async function OtpPage() {
   // sent to the password step immediately, rather than being offered a code box
   // that cannot possibly succeed.
   if (!(await getMfaToken())) {
-    redirect("/login")
+    redirect("/login?reason=expired")
   }
 
   return <OtpForm />

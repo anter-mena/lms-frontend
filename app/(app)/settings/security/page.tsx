@@ -47,12 +47,13 @@ export default async function SecurityPage() {
           </p>
         </div>
 
+        {/* Unreachable in practice, and kept anyway. Two-factor is mandatory, so
+            anyone able to load this page has it on — an account without it is
+            redirected to /two-factor before any (app) page renders. If that rule
+            is ever relaxed, this is already correct rather than pointing at a
+            route that moved. */}
         {!user.mfaEnabled && (
-          <Button
-            size="sm"
-            className="shrink-0"
-            render={<Link href="/settings/security/two-factor" />}
-          >
+          <Button size="sm" className="shrink-0" render={<Link href="/two-factor" />}>
             Set up
           </Button>
         )}

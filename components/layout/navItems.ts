@@ -82,7 +82,7 @@ export const settingsSection: NavSection = {
     { title: "Help Center", href: "/help-center", icon: LifeBuoy },
     // Points at the section root, not /settings/profile: isNavItemActive does a
     // longest-prefix match, so this row stays lit anywhere under /settings —
-    // including /settings/security/two-factor.
+    // including /settings/security.
     { title: "System Settings", href: "/settings", icon: Settings },
   ],
 }

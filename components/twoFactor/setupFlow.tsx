@@ -1,23 +1,16 @@
 "use client"
 
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useActionState, useState } from "react"
-import {
-  ArrowLeft,
-  Check,
-  Copy,
-  KeyRound,
-  ShieldCheck,
-  Smartphone,
-} from "lucide-react"
+import { Check, Copy, KeyRound, ShieldAlert, Smartphone } from "lucide-react"
 
+import { logout } from "@/app/(app)/actions"
 import {
   confirmSetup,
   startSetup,
   type ConfirmState,
   type SetupState,
-} from "@/app/(app)/settings/security/two-factor/actions"
+} from "@/app/(auth)/two-factor/actions"
 import { RecoveryCodesPanel } from "@/components/twoFactor/recoveryCodesPanel"
 import { Button } from "@/components/ui/button"
 import { FieldError } from "@/components/ui/field"
@@ -81,6 +74,7 @@ function TwoFactorSetupFlow({ email }: { email: string }) {
       formAction={startAction}
       pending={startPending}
       message={setupState.message}
+      email={email}
     />
   )
 }
@@ -91,17 +85,29 @@ function IntroStep({
   formAction,
   pending,
   message,
+  email,
 }: {
   formAction: (formData: FormData) => void
   pending: boolean
   message?: string
+  email: string
 }) {
   return (
     <Shell>
+      {/* States the rule before anything else. There is no Cancel on this
+          screen and nothing behind it — saying so plainly is kinder than
+          letting someone hunt for a way past it. */}
+      <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+        <p className="text-sm text-destructive">
+          <strong className="font-medium">
+            Two-factor authentication is required.
+          </strong>{" "}
+          No action is permitted on this account until it is switched on.
+        </p>
+      </div>
+
       <header className="flex flex-col gap-1">
-        <div className="mb-2 flex size-9 items-center justify-center rounded-lg border bg-card shadow-sm">
-          <ShieldCheck className="size-4" aria-hidden />
-        </div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
           Set up two-factor authentication
         </h1>
@@ -126,14 +132,27 @@ function IntroStep({
       <form action={formAction} className="flex flex-col gap-3">
         {message ? <ErrorBanner>{message}</ErrorBanner> : null}
 
-        <div className="flex items-center gap-2">
+        <div>
           <Button type="submit" disabled={pending}>
-            {pending ? "Preparing…" : "Start setup"}
-          </Button>
-          <Button variant="ghost" render={<Link href="/settings/security" />}>
-            Cancel
+            {pending ? "Preparing…" : "Set up two-factor"}
           </Button>
         </div>
+      </form>
+
+      {/* The escape hatch, and not optional. The commonest reason to be stuck
+          on this screen is being signed in as the wrong account — a shared
+          machine, or the browser filling in the other address. Without this,
+          that mistake has no exit but clearing cookies. */}
+      <form action={logout} className="border-t pt-4 text-xs">
+        <span className="text-muted-foreground">
+          Signed in as <span className="text-foreground">{email}</span>.{" "}
+        </span>
+        <button
+          type="submit"
+          className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          Sign out
+        </button>
       </form>
     </Shell>
   )
@@ -224,25 +243,26 @@ function ScanStep({
           <FieldError>{state.fieldErrors.code}</FieldError>
         ) : null}
 
-        <div className="flex items-center gap-2">
+        {/* No Cancel. There is nowhere to cancel to — every other page bounces
+            an un-enrolled account straight back here, so a button promising
+            escape would just blink and return. Signing out is the only genuine
+            way off this screen, and it is offered below. */}
+        <div>
           <Button type="submit" disabled={pending}>
             {pending ? "Checking…" : "Turn on two-factor"}
-          </Button>
-          <Button variant="ghost" render={<Link href="/settings/security" />}>
-            Cancel
           </Button>
         </div>
       </form>
 
-      <p className="text-xs">
-        <Link
-          href="/settings/security"
-          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+      <form action={logout} className="border-t pt-4 text-xs">
+        <span className="text-muted-foreground">Wrong account? </span>
+        <button
+          type="submit"
+          className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
-          <ArrowLeft className="size-3" aria-hidden />
-          Back to security
-        </Link>
-      </p>
+          Sign out
+        </button>
+      </form>
     </Shell>
   )
 }

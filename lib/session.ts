@@ -2,6 +2,8 @@ import "server-only"
 
 import { cookies } from "next/headers"
 
+import { MFA_COOKIE, SESSION_COOKIE } from "@/lib/cookieNames"
+
 /**
  * Where the access token lives.
  *
@@ -9,14 +11,11 @@ import { cookies } from "next/headers"
  * read it, so a single XSS — or one compromised dependency — cannot walk off
  * with a token that stays valid for 24 hours. The cost is that every call to the
  * backend has to happen server-side, which is why this module is server-only.
+ *
+ * The names themselves live in `lib/cookieNames`, which middleware can import and
+ * this module cannot be.
  */
-export const SESSION_COOKIE = "lms_session"
-
-/**
- * Issued when the password step succeeds but a second factor is still owed.
- * Opens nothing except the 2FA endpoint, and the backend expires it in 5 minutes.
- */
-export const MFA_COOKIE = "lms_mfa"
+export { MFA_COOKIE, SESSION_COOKIE }
 
 const isProduction = process.env.NODE_ENV === "production"
 
@@ -61,6 +60,18 @@ export async function getSessionToken() {
 
 export async function getMfaToken() {
   return (await cookies()).get(MFA_COOKIE)?.value ?? null
+}
+
+/**
+ * Abandons a half-finished login without touching an existing session.
+ *
+ * <p>Called when someone leaves the code screen to sign in as somebody else. The
+ * proof that they passed the password step has no purpose once they have walked
+ * away from it, and leaving it lying around for its remaining five minutes means
+ * the code screen stays reachable after they have visibly given up on it.
+ */
+export async function clearMfaChallenge() {
+  (await cookies()).delete(MFA_COOKIE)
 }
 
 export async function destroySession() {
