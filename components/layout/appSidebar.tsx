@@ -25,7 +25,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { LiquidGlassLayers } from "@/components/ui/liquidGlass"
-import { IdentityCard } from "@/components/layout/identityCard"
 import {
   isNavItemActive,
   navSections,
@@ -80,9 +79,12 @@ const SCROLLBAR = [
 function AppSidebar({
   open,
   onToggle,
+  identity,
 }: {
   open: boolean
   onToggle: () => void
+  /** The identity card, rendered on the server and handed down by the layout. */
+  identity?: React.ReactNode
 }) {
   const pathname = usePathname()
 
@@ -94,7 +96,9 @@ function AppSidebar({
         // scrolling with the page. self-start matters: without it the flex
         // parent stretches the aside to the full content height and there is
         // nothing left for sticky to do.
-        "sticky top-0 h-svh shrink-0 self-start overflow-hidden bg-[#F3F2F0] transition-[width] duration-300 ease-in-out motion-reduce:transition-none",
+        // bg-sidebar, not the literal it used to be. The filter panel now wants
+        // the same surface, and two copies of a hex is one of them going stale.
+        "sticky top-0 h-svh shrink-0 self-start overflow-hidden bg-sidebar transition-[width] duration-300 ease-in-out motion-reduce:transition-none",
         open ? "w-70 border-r border-[#E8E8E5]" : "w-0"
       )}
     >
@@ -109,7 +113,7 @@ function AppSidebar({
             matching that keeps the trigger from jumping when the sidebar
             opens or closes. */}
         <div className="flex items-start gap-2 px-6 pt-3.5">
-          <IdentityCard />
+          {identity}
           <SidebarTrigger open onToggle={onToggle} />
         </div>
 

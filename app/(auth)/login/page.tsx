@@ -3,7 +3,7 @@ import Link from "next/link"
 import { GalleryVerticalEnd } from "lucide-react"
 
 import { LoginForm } from "@/components/login/loginForm"
-import { LoginNotice } from "@/components/login/loginNotice"
+import { TopBanner } from "@/components/ui/topBanner"
 import { redirectIfAuthenticated } from "@/lib/auth"
 
 export const metadata: Metadata = {
@@ -74,7 +74,7 @@ export default async function LoginPage({
       {/* Informational, not an error: nothing went wrong and nobody did anything
           incorrectly, so it is deliberately not the destructive red the form
           uses for a rejected password. */}
-      {notice ? <LoginNotice message={notice} /> : null}
+      {notice ? <TopBanner message={notice} /> : null}
 
       <LoginForm />
     </div>

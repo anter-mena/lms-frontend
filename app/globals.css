@@ -29,6 +29,8 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -66,6 +68,16 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  /* The one deliberate colour in an otherwise grey palette. It exists solely as
+     the counterpart to --destructive: a figure that moved up, against one that
+     moved down. Chroma is kept close to --destructive's so neither shouts louder
+     than the other in the same row. */
+  --success: oklch(0.596 0.145 163);
+  /* The third state, for things that are neither settled nor wrong — waiting on
+     a verification, part-way through something. Darkened well below the yellow
+     it looks like, because amber at full lightness fails contrast on white and
+     these are worn as small text. */
+  --warning: oklch(0.66 0.14 70);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -75,7 +87,13 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
+  /* The sunken surface: sidebar, and any panel that should read as sitting
+     behind the content rather than on it. Kept as the original hex rather than
+     converted to oklch — the sidebar has shipped with this exact value since it
+     was built, and an approximate conversion would shift it by a hair for no
+     gain. Slightly warm, which is what stops it looking like dead grey next to
+     the white cards. */
+  --sidebar: #f3f2f0;
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -101,6 +119,10 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  /* Lifted for dark, matching how --destructive brightens here — the same colour
+     at light-mode lightness would sit too close to the background to read. */
+  --success: oklch(0.723 0.155 163);
+  --warning: oklch(0.79 0.145 75);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);

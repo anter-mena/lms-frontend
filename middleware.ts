@@ -27,8 +27,16 @@ import { MFA_COOKIE, SESSION_COOKIE } from "@/lib/cookieNames"
  * problem; the second reintroduces the wait this exists to remove.
  */
 
-/** Signed-in only. Prefix match, so `/settings/security` is covered by `/settings`. */
-const PROTECTED = ["/dashboard", "/settings"]
+/**
+ * Reachable by anyone, signed in or not.
+ *
+ * <p>Listed as the exception, with everything unlisted treated as private. The
+ * inverse — naming the protected routes — was the first version, and it meant a
+ * page added later silently lost its redirect and got its layout flash back,
+ * with nothing failing to say so. This way a new route is private because nobody
+ * did anything, and making it public is a deliberate line here.
+ */
+const PUBLIC = ["/help-center", "/privacy-policy", "/terms-of-use"]
 
 /** Signed-out only. Somebody already in has no use for these. */
 const GUEST_ONLY = ["/login", "/forgot-password"]
@@ -70,8 +78,17 @@ export function middleware(request: NextRequest) {
   const go = (to: string) =>
     NextResponse.redirect(new URL(to, request.url))
 
-  // ── Signed-in pages ──────────────────────────────────────────────────────
-  if (PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  const isPublic = PUBLIC.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  )
+  const hasOwnRule =
+    isPublic ||
+    GUEST_ONLY.includes(pathname) ||
+    pathname === OTP ||
+    pathname === ENROL
+
+  // ── Signed-in pages: everything without a rule of its own ────────────────
+  if (!hasOwnRule) {
     if (owesEnrolment) return go(ENROL)
     if (!signedIn) return go("/login")
   }
@@ -129,16 +146,17 @@ export function middleware(request: NextRequest) {
 }
 
 /**
- * Only the routes with a rule. Middleware runs before everything it matches, so
- * a catch-all would tax every asset request to serve six pages.
+ * Every page request, and nothing else.
+ *
+ * <p>Excluded: `/api` (the proxy through to the backend, which authenticates
+ * itself), Next's own internals, and anything with a file extension — images,
+ * fonts, the favicon. What is left is navigations, which is exactly what has a
+ * right answer about where somebody belongs.
+ *
+ * <p>Broad on purpose, unlike the earlier explicit list. The work per request is
+ * a cookie read and a base64 decode — no I/O, no backend call — and the cost of
+ * missing a route is a page that flashes content nobody should see.
  */
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/settings/:path*",
-    "/login",
-    "/forgot-password",
-    "/otp",
-    "/two-factor",
-  ],
+  matcher: ["/((?!api|_next|favicon.ico|.*\\.[\\w]+$).*)"],
 }

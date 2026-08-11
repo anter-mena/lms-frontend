@@ -3,7 +3,6 @@ import {
   LifeBuoy,
   Settings,
   Share2,
-  ShieldCheck,
   UserCog,
   Users,
 } from "lucide-react"
@@ -61,11 +60,11 @@ export const navSections: NavSection[] = [
     title: "Management",
     items: [
       { title: "Users", href: "/users", icon: UserCog },
-      {
-        title: "Roles & Permissions",
-        href: "/roles-permissions",
-        icon: ShieldCheck,
-      },
+      // Roles & Permissions used to sit here and no longer does. The screen
+      // still exists at /roles-permissions, but changing somebody's permissions
+      // only makes sense once you have said whose — so it is reached by
+      // "Change permissions" on an account, which carries the person in the URL,
+      // rather than by a link that arrives with nobody selected.
     ],
   },
 ]

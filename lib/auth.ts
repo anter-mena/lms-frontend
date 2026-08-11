@@ -48,6 +48,23 @@ const loadUser = cache(async (): Promise<ApiResult<SessionUser> | null> => {
 })
 
 /**
+ * The signed-in user, or `null`. Never redirects, never throws.
+ *
+ * <p>For chrome rather than pages — the sidebar's identity card and the navbar
+ * avatar. Those render inside a layout, which must not be in the business of
+ * deciding where anyone goes: the page below it and the middleware above it both
+ * do that already, and a third opinion in a component that renders on every
+ * route is how redirect loops start.
+ *
+ * <p>Shares `loadUser`'s per-request cache, so asking here costs nothing beyond
+ * what the page was already fetching.
+ */
+export async function currentUser(): Promise<SessionUser | null> {
+  const result = await loadUser()
+  return result?.ok ? result.data : null
+}
+
+/**
  * For pages under `(app)`. Returns the signed-in user, so the page gets the
  * data it needs from the same call that protected it.
  *

@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Bell, Inbox } from "lucide-react"
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,7 +29,14 @@ function labelFor(segment: string) {
  * closed. It lives here rather than floating over the content so it cannot
  * overlap the breadcrumb.
  */
-function AppNavbar({ leading }: { leading?: React.ReactNode }) {
+function AppNavbar({
+  leading,
+  avatar,
+}: {
+  leading?: React.ReactNode
+  /** The signed-in user's initials, rendered on the server by the layout. */
+  avatar?: React.ReactNode
+}) {
   // Derived, not hardcoded: this navbar is part of the shell, so it renders on
   // /profile as well as /dashboard, and a fixed "Dashboard" crumb would lie.
   const pathname = usePathname()
@@ -85,22 +91,38 @@ function AppNavbar({ leading }: { leading?: React.ReactNode }) {
           <Bell className="relative" />
         </Button>
 
-        <Button
-          variant="outline"
-          size="icon"
-          className="relative overflow-hidden bg-card"
-          aria-label="Inbox"
-        >
-          <LiquidGlassLayers />
-          <Inbox className="relative" />
-        </Button>
+        {/* ⚠️ The dot is hardcoded — there is no unread count yet. When one
+            exists it should drive both the dot and the label, so the button
+            announces "Inbox, unread messages" rather than leaving a screen
+            reader with no idea the marker is there. */}
+        {/* The dot lives outside the button, not in it. The button clips its
+            children to draw the glass, so anything sitting on the corner was
+            being cut in half — this wrapper gives it something to hang off
+            instead. */}
+        <div className="relative">
+          <Button
+            variant="outline"
+            size="icon"
+            className="relative overflow-hidden bg-card"
+            aria-label="Inbox"
+          >
+            <LiquidGlassLayers />
+            <Inbox className="relative" />
+          </Button>
 
-        {/* Squared off rather than a circle. rounded has to be overridden in
-            three places — the component hardcodes rounded-full on the root, on
-            its ::after ring, and on the fallback. */}
-        <Avatar className="rounded-lg after:rounded-lg">
-          <AvatarFallback className="rounded-lg">NC</AvatarFallback>
-        </Avatar>
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 flex size-2"
+          >
+            {/* Two dots stacked: one expanding and fading outward, one solid on
+                top. The animated ring alone would spend most of its cycle nearly
+                invisible, so the marker would appear to blink out. */}
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-destructive opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-destructive ring-2 ring-background" />
+          </span>
+        </div>
+
+        {avatar}
       </div>
     </header>
   )

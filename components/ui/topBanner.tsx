@@ -6,18 +6,18 @@ import { Info, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
- * Explains why someone was sent back to the sign-in screen.
+ * A notice about the page as a whole, pinned to the top of the window.
  *
  * <p>Two shapes, one element:
  *
  * <ul>
- *   <li><b>Mobile</b> — a quiet panel in the column above the form, which is
- *       where a narrow screen has room for it.</li>
- *   <li><b>Desktop</b> — a full-width bar pinned to the top of the window. It is
+ *   <li><b>Mobile</b> — a quiet panel in the flow of the column, which is where
+ *       a narrow screen has room for it.</li>
+ *   <li><b>Desktop</b> — a full-width bar across the top of the window. It is
  *       {@code fixed}, so it leaves the flex flow and the parent's gap stops
- *       counting it: the form sits in exactly the same place whether the message
- *       is there or not. A note about a failed sign-in should never move the
- *       field you were about to type into.</li>
+ *       counting it: everything below sits in exactly the same place whether the
+ *       message is there or not. A notice should never move the field somebody
+ *       was about to type into.</li>
  * </ul>
  *
  * <p>The close button sits <em>beside</em> the text rather than out at the far
@@ -26,11 +26,15 @@ import { cn } from "@/lib/utils"
  * the message.
  *
  * <p>Client-side only because of that button — dismissing is a local decision
- * that never needs to reach the server. There is nothing to remember: the
- * message only exists because of how this page was reached, so the next arrival
- * should get it again.
+ * that never needs to reach the server. There is nothing to remember either:
+ * both callers show this because of a state the page is currently in, so the
+ * next arrival in that state should get it again.
+ *
+ * <p>⚠️ Inside the signed-in shell this lands on top of the navbar, which is
+ * {@code sticky top-0 z-10}. That is the price of a banner that spans the whole
+ * window rather than the content column.
  */
-function LoginNotice({ message }: { message: string }) {
+function TopBanner({ message }: { message: string }) {
   const [dismissed, setDismissed] = useState(false)
 
   if (dismissed) return null
@@ -73,4 +77,4 @@ function LoginNotice({ message }: { message: string }) {
   )
 }
 
-export { LoginNotice }
+export { TopBanner }

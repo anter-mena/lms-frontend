@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { LiquidGlassFilter } from "@/components/ui/liquidGlass";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -34,7 +35,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
+        {/* Wraps everything so tooltips share one delay: move between two of
+            them quickly and the second opens at once instead of making you wait
+            all over again. Without it each tooltip times itself in isolation. */}
+        <TooltipProvider>{children}</TooltipProvider>
         {/* One definition for every glass surface in the app — SVG filter ids
             are document-global. */}
         <LiquidGlassFilter />
