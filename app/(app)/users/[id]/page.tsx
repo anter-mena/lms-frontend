@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
+import { notFound } from "next/navigation"
 
 import { PageHeader } from "@/components/layout/pageHeader"
 import { UserDetail } from "@/components/users/userDetail"
 import { requireUser } from "@/lib/auth"
-import { placeholderUser } from "@/lib/placeholderUsers"
+import { getUser } from "@/lib/users"
 
 export const metadata: Metadata = {
   title: "User details",
@@ -19,13 +20,11 @@ export const metadata: Metadata = {
  * also means a row can be linked to, which is how anyone actually asks a
  * colleague about an account.
  *
- * <p>⚠️ <b>Fed a placeholder.</b> `GET /api/users/{id}` does not exist — the
- * backend only lists everyone — so this shows the same invented person whatever
- * id is in the URL, with only the id itself taken from the address. The layout is
- * the deliverable here; the wiring waits on the endpoint.
+ * <p>Refusing a member is middleware's job, not this page's: the whole `/users`
+ * tree is admin-only, and middleware is the last moment a real 403 can still be
+ * returned — by the time a page runs the layout has already started streaming a
+ * 200.
  */
-const USE_PLACEHOLDER_USER: boolean = true
-
 export default async function UserDetailPage({
   params,
 }: {
@@ -35,10 +34,18 @@ export default async function UserDetailPage({
   await requireUser()
 
   const { id } = await params
-  const user = placeholderUser(Number(id) || 0)
+  const result = await getUser(id)
+
+  if (!result.ok) {
+    // 404 covers both "no such account" and a hand-typed `/users/banana`, which
+    // are the same thing from a reader's point of view. Anything else is an
+    // outage and should be thrown rather than dressed up as a missing person.
+    if (result.error.status === 404 || result.error.status === 400) notFound()
+    throw new Error(result.error.message)
+  }
 
   return (
-    <div className="flex h-full flex-col gap-5 overflow-hidden p-6 pb-3">
+    <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden p-6 pb-3">
       {/* The navbar builds a breadcrumb from the path, so it already reads
           "users › 12" up there. The chevron is the deliberate way back to the
           list — a breadcrumb is a location, not a control.
@@ -52,16 +59,11 @@ export default async function UserDetailPage({
         backLabel="Back to users"
       />
 
-      {USE_PLACEHOLDER_USER ? (
-        <UserDetail user={user} />
-      ) : (
-        <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed bg-muted/30 p-10">
-          <p className="max-w-sm text-center text-sm text-muted-foreground">
-            Nothing here yet. This page needs an endpoint that returns a single
-            user — the backend currently only lists everyone at once.
-          </p>
-        </div>
-      )}
+      {/* No `activity` passed, and that is not an omission — nothing in the
+          system records what an account did. The panel says so plainly rather
+          than showing an empty list, which would read as "this person has done
+          nothing". It needs an `audit_log` table first. */}
+      <UserDetail user={result.data} />
     </div>
   )
 }

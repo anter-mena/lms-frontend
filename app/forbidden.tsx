@@ -16,7 +16,7 @@ export default function Forbidden() {
       code="403"
       icon={ShieldX}
       title="You don't have access to this"
-      description="Your role doesn't include permission for this area. If you need it for your work, your administrator can grant it."
+      description="Your role doesn't include this area. Some access can be granted to you individually and some — Management, for instance — comes only with being an administrator. An administrator can tell you which this is."
     >
       <Button size="lg" render={<Link href="/dashboard" />}>
         Go to dashboard

@@ -21,11 +21,20 @@ function AppShell({
   children,
   identity,
   avatar,
+  isAdmin = false,
 }: {
   children: React.ReactNode
   /** Rendered on the server by the layout — see the note there. */
   identity?: React.ReactNode
   avatar?: React.ReactNode
+  /**
+   * Whether to draw the admin-only parts of the menu.
+   *
+   * <p>Read on the server by the layout, where the session is. Passing it down
+   * as a plain boolean keeps this component free of any way to ask who is
+   * signed in, which is what lets it stay a Client Component.
+   */
+  isAdmin?: boolean
 }) {
   const [open, setOpen] = useState(true)
 
@@ -35,7 +44,12 @@ function AppShell({
     // stay put, and whatever needs to scroll does it inside the content row
     // below. overflow-hidden is what enforces that rather than merely asking.
     <div className="flex h-svh overflow-hidden">
-      <AppSidebar open={open} onToggle={() => setOpen(false)} identity={identity} />
+      <AppSidebar
+        open={open}
+        onToggle={() => setOpen(false)}
+        identity={identity}
+        isAdmin={isAdmin}
+      />
 
       {/* No background of its own — the page shows through, which is one less
           colour to keep in sync if the page background ever changes. */}

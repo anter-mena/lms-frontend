@@ -81,9 +81,18 @@ const BANDS = [
 function GeneratedPassword({
   value,
   onChange,
+  name,
 }: {
   value: string
   onChange: (password: string) => void
+  /**
+   * Submits under this name when the field is inside a form.
+   *
+   * <p>Left out where the value is read from React state instead — the reset
+   * dialog passes it straight to an action — so that the two callers cannot end
+   * up sending it twice under different names.
+   */
+  name?: string
 }) {
   const [visible, setVisible] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -111,8 +120,17 @@ function GeneratedPassword({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
+        {/* `name` is what makes this part of the form. Without it the password
+            is on screen and not in the submission — the field looks filled in,
+            the request arrives with nothing, and the backend answers "the
+            request contains invalid fields" about a box you can see a value in.
+
+            readOnly rather than disabled, deliberately: a disabled field is
+            excluded from submission too, so it would reintroduce exactly that
+            bug while looking like the right way to stop somebody typing. */}
         <Input
           readOnly
+          name={name}
           type={visible ? "text" : "password"}
           value={value}
           aria-label="Generated password"

@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { currentUser } from "@/lib/auth"
+import { initialsOf } from "@/lib/initials"
 
 /**
  * The initials in the navbar, for whoever is actually signed in.
@@ -33,17 +34,4 @@ function UserAvatarSkeleton() {
   return <Skeleton className="size-8 shrink-0 rounded-lg" />
 }
 
-/**
- * First letter of each name. Falls back to the first two of whichever exists,
- * so a single-word name still produces something rather than a lonely letter
- * floating in a 32px square.
- */
-function initialsOf(firstName: string, lastName: string) {
-  const first = firstName?.trim() ?? ""
-  const last = lastName?.trim() ?? ""
-
-  if (first && last) return (first[0] + last[0]).toUpperCase()
-  return (first || last).slice(0, 2).toUpperCase() || "?"
-}
-
-export { UserAvatar, UserAvatarSkeleton, initialsOf }
+export { UserAvatar, UserAvatarSkeleton }

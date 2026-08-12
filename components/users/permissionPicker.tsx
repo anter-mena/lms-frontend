@@ -4,12 +4,9 @@ import { RotateCcw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  RESOURCE_GROUPS,
-  type Resource,
-  diffFromRole,
-  permissionsForRole,
-} from "@/lib/permissions"
+import { useAccess } from "@/components/access/accessProvider"
+import { grantableGroups } from "@/lib/access"
+import type { PermissionModule } from "@/lib/userTypes"
 import { cn } from "@/lib/utils"
 
 /**
@@ -42,7 +39,7 @@ import { cn } from "@/lib/utils"
 const VIEW_ACTION = "READ"
 
 /** Whether the actions that need `READ` are currently allowed to be ticked. */
-function canSee(resource: Resource, value: Set<string>) {
+function canSee(resource: PermissionModule, value: Set<string>) {
   // A module with no read action of its own gates nothing — every action on it
   // stands alone.
   if (!resource.actions.includes(VIEW_ACTION)) return true
@@ -56,7 +53,7 @@ function canSee(resource: Resource, value: Set<string>) {
  * list reads as an afterthought. Putting it at the top means the row that
  * unlocks the module is the first one you meet.
  */
-function orderedActions(resource: Resource) {
+function orderedActions(resource: PermissionModule) {
   if (!resource.actions.includes(VIEW_ACTION)) return resource.actions
   return [
     VIEW_ACTION,
@@ -73,11 +70,21 @@ function PermissionPicker({
   value: Set<string>
   onChange: (next: Set<string>) => void
 }) {
-  const base = new Set(permissionsForRole(role))
-  const { granted, denied } = diffFromRole(role, value)
+  const access = useAccess()
+
+  const base = new Set(access.permissionsForRole(role))
+  const { granted, denied } = access.diffFromRole(role, value)
   const changed = granted.length + denied.length
 
-  function toggle(resource: Resource, action: string, checked: boolean) {
+  // Management never appears here. It is marked admin-only in the database, so
+  // the API refuses to grant it to one person however many boxes are ticked —
+  // offering them would only produce an error on save.
+  //
+  // Asked as "does this role already hold everything" rather than checking for
+  // ADMIN, so it keeps working if the roles change shape.
+  const groups = grantableGroups(access.groups, access.roleGrantsEverything(role))
+
+  function toggle(resource: PermissionModule, action: string, checked: boolean) {
     const next = new Set(value)
     const permission = `${resource.key}:${action}`
 
@@ -97,7 +104,7 @@ function PermissionPicker({
   }
 
   /** Everything in a section at once — the row of ticks people actually want. */
-  function toggleGroup(resources: Resource[], grant: boolean) {
+  function toggleGroup(resources: PermissionModule[], grant: boolean) {
     const next = new Set(value)
 
     resources.forEach((resource) =>
@@ -133,12 +140,12 @@ function PermissionPicker({
         )}
       </div>
 
-      {RESOURCE_GROUPS.map((group) => {
-        const total = group.resources.reduce(
+      {groups.map((group) => {
+        const total = group.modules.reduce(
           (sum, resource) => sum + resource.actions.length,
           0,
         )
-        const held = group.resources.reduce(
+        const held = group.modules.reduce(
           (sum, resource) =>
             sum +
             resource.actions.filter((action) =>
@@ -175,7 +182,7 @@ function PermissionPicker({
                   type="button"
                   variant="ghost"
                   size="xs"
-                  onClick={() => toggleGroup(group.resources, held < total)}
+                  onClick={() => toggleGroup(group.modules, held < total)}
                 >
                   {held < total ? "Select all" : "Clear"}
                 </Button>
@@ -186,7 +193,7 @@ function PermissionPicker({
                 match the 2px rim around them, so the stack reads as one card
                 divided up instead of several cards in a box. */}
             <div className="flex flex-col gap-0.5">
-              {group.resources.map((resource) => {
+              {group.modules.map((resource) => {
                 const unlocked = canSee(resource, value)
 
                 return (

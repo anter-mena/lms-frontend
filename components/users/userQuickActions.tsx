@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { Ban, KeyRound, KeySquare, ShieldX, UserCog } from "lucide-react"
+import { Ban, KeyRound, KeySquare, ShieldX, SquarePen, UserCog } from "lucide-react"
 
 import {
   UserActionDialogs,
@@ -38,6 +38,18 @@ function UserQuickActions({ user }: { user: ActionTarget }) {
 
   return (
     <div className="flex flex-col gap-1.5">
+      {/* First, because it is the least consequential thing here and the one
+          people reach for most: a misspelt surname. */}
+      <Button
+        variant="outline"
+        size="sm"
+        className={ACTION}
+        render={<Link href={`/users/${user.id}/edit`} />}
+      >
+        <SquarePen data-icon="inline-start" />
+        Edit details
+      </Button>
+
       <Button
         variant="outline"
         size="sm"
@@ -55,7 +67,7 @@ function UserQuickActions({ user }: { user: ActionTarget }) {
         variant="outline"
         size="sm"
         className={ACTION}
-        render={<Link href={`/roles-permissions?user=${user.id}`} />}
+        render={<Link href={`/users/${user.id}/permissions`} />}
       >
         <KeySquare data-icon="inline-start" />
         Change permissions
@@ -83,17 +95,21 @@ function UserQuickActions({ user }: { user: ActionTarget }) {
 
       {/* Divided off, not just placed last. */}
       <div className="mt-0.5 border-t pt-2">
+        {/* One button, both directions. An account that is already off needs a
+            way back on, and a second button that is only ever live half the time
+            is a row of dead controls the rest of the time. */}
         <Button
           variant="outline"
           size="sm"
           className={cn(
             ACTION,
-            "text-destructive hover:bg-destructive/10 hover:text-destructive"
+            user.status === "ACTIVE" &&
+              "text-destructive hover:bg-destructive/10 hover:text-destructive"
           )}
           onClick={() => setAction("deactivate")}
         >
           <Ban data-icon="inline-start" />
-          Deactivate account
+          {user.status === "ACTIVE" ? "Deactivate account" : "Turn back on"}
         </Button>
       </div>
 

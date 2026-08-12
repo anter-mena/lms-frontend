@@ -45,7 +45,26 @@ const GUEST_ONLY = ["/login", "/forgot-password"]
 const OTP = "/otp"
 const ENROL = "/two-factor"
 
-type Claims = { typ?: string; exp?: number }
+/**
+ * Management. Administrators only, and not grantable to anybody else.
+ *
+ * <p>Decided here rather than in the page for the reason at the top of this file:
+ * the layout streams before the page runs, so a page calling `forbidden()` gets
+ * the right screen but the response has already gone out as a 200. Middleware is
+ * the last moment a status can still be chosen.
+ *
+ * <p>Safe to judge from the token because the backend now ends every session when
+ * a role changes — so the `role` claim cannot be stale in the way it used to be.
+ * A promoted member signs in again and arrives as an administrator; a demoted one
+ * cannot linger.
+ *
+ * <p>⚠️ Still not the security boundary. The token is decoded, not verified, so
+ * a forged claim gets past this — and then gets 403 from the backend on every
+ * request the screen makes. This decides which screen to build, nothing more.
+ */
+const ADMIN_ONLY = ["/users"]
+
+type Claims = { typ?: string; exp?: number; role?: string }
 
 /**
  * The middle segment of a JWT, base64url-decoded. No verification, deliberately
@@ -74,6 +93,31 @@ export function middleware(request: NextRequest) {
   const live = Boolean(claims?.exp && claims.exp * 1000 > Date.now())
   const signedIn = live && claims?.typ === "access"
   const owesEnrolment = live && claims?.typ === "enrolment_pending"
+  const isAdmin = claims?.role === "ADMIN"
+
+  /**
+   * A session the backend has thrown out, which still looks alive from here.
+   *
+   * <p>This case did not exist until sessions could be ended server-side. A token
+   * used to be good until it expired, so "unexpired and the right type" was the
+   * same thing as "usable". Now changing somebody's role, resetting their
+   * password or switching their account off all move a cut-off on the account,
+   * and every token issued before it stops working at once — while still looking
+   * perfectly valid to a decoder that only reads `exp` and `typ`.
+   *
+   * <p>Without this the two halves disagreed and fought: a page asked the backend,
+   * was refused, and sent the person to sign in; middleware saw a live-looking
+   * token and sent them straight back. That is the infinite reload — and it never
+   * showed as a redirect loop in the browser's network tab, because the page's
+   * redirect travels inside the streamed payload rather than as a 307.
+   *
+   * <p>The reason in the URL is the only signal available here. Middleware cannot
+   * ask the backend without a round trip on every navigation, which is the cost
+   * this file exists to avoid.
+   */
+  const revoked =
+    GUEST_ONLY.includes(pathname) &&
+    request.nextUrl.searchParams.get("reason") === "session-expired"
 
   const go = (to: string) =>
     NextResponse.redirect(new URL(to, request.url))
@@ -93,6 +137,20 @@ export function middleware(request: NextRequest) {
     if (!signedIn) return go("/login")
   }
 
+  // ── Management ───────────────────────────────────────────────────────────
+  // Rewritten, not redirected: the address stays on /users, which is what the
+  // person asked for and what they should see in the bar while being told they
+  // cannot have it. A redirect would rewrite history and lose the request.
+  if (
+    signedIn &&
+    !isAdmin &&
+    ADMIN_ONLY.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
+    return NextResponse.rewrite(new URL("/no-access", request.url), {
+      status: 403,
+    })
+  }
+
   // ── The enrolment gate ───────────────────────────────────────────────────
   if (pathname === ENROL) {
     if (signedIn) return go("/dashboard")
@@ -109,7 +167,9 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Signed-out pages ─────────────────────────────────────────────────────
-  if (GUEST_ONLY.includes(pathname)) {
+  // `revoked` first: somebody sent here by a page that was refused must be
+  // allowed to land, however healthy their cookie looks from the outside.
+  if (GUEST_ONLY.includes(pathname) && !revoked) {
     if (signedIn) return go("/dashboard")
     if (owesEnrolment) return go(ENROL)
   }
@@ -140,6 +200,15 @@ export function middleware(request: NextRequest) {
     request.cookies.has(MFA_COOKIE)
   ) {
     response.cookies.delete(MFA_COOKIE)
+  }
+
+  // And the dead session itself. Letting them land was enough to stop the loop;
+  // clearing the cookie is what stops it starting again the moment they navigate
+  // anywhere else, and it is the only place in the app that can — a page render
+  // may not write cookies, which is why the backend refusing a token could never
+  // clean up after itself.
+  if (revoked && request.method === "GET" && !isPrefetch) {
+    response.cookies.delete(SESSION_COOKIE)
   }
 
   return response

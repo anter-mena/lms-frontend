@@ -1,9 +1,15 @@
 "use client"
 
-import { useState } from "react"
-import { KeyRound, ShieldAlert, UserCog } from "lucide-react"
+import { useState, useTransition } from "react"
+import { CircleAlert, KeyRound, ShieldAlert, UserCog, UserX } from "lucide-react"
 
-import { DeactivateUserDialog } from "@/components/users/deactivateUserDialog"
+import {
+  changeUserRole,
+  changeUserStatus,
+  resetUserTwoFactor,
+  setUserPassword,
+} from "@/app/(app)/users/actions"
+import type { ActionState } from "@/lib/actionState"
 import { GeneratedPassword } from "@/components/users/generatedPassword"
 import {
   AlertDialog,
@@ -17,7 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { LiquidGlassLayers } from "@/components/ui/liquidGlass"
-import { ROLES, permissionsForRole } from "@/lib/permissions"
+import { useAccess } from "@/components/access/accessProvider"
 import { cn } from "@/lib/utils"
 
 /**
@@ -32,9 +38,12 @@ import { cn } from "@/lib/utils"
  * item closes the menu and unmounts its contents, so a dialog nested in there
  * vanishes in the frame it appeared.
  *
- * <p>⚠️ <b>None of these do anything yet.</b> Only two-factor reset has an
- * endpoint. Changing a role, changing a password and changing a status are all
- * blocker #2 on the bug list — the backend has no way to do any of them, at all.
+ * <p><b>The confirm button does not close the dialog.</b> `AlertDialogAction` is
+ * a plain button rather than a close trigger, which is what lets each of these
+ * wait for the server and then decide. Closing optimistically would throw away
+ * the one thing worth reading when it fails: the backend refuses several of
+ * these on purpose — the last active administrator, your own account — and those
+ * sentences have nowhere to appear once the dialog is gone.
  */
 
 /** Which dialog is open. `null` is the resting state, and there is only ever one. */
@@ -48,6 +57,7 @@ type ActionTarget = {
   lastName: string
   email: string
   role: string
+  status: string
   mfaEnabled: boolean
 }
 
@@ -103,6 +113,51 @@ function DialogHead({
 }
 
 /**
+ * Whatever the server said when it refused.
+ *
+ * <p>Passed through unchanged. "This is the last active administrator. Promote
+ * somebody else first." is the entire value of the request having failed, and
+ * replacing it with "Something went wrong" throws away the only part anybody
+ * needed.
+ */
+function Refusal({ message }: { message?: string }) {
+  if (!message) return null
+
+  return (
+    <p
+      role="alert"
+      aria-live="polite"
+      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+    >
+      <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      {message}
+    </p>
+  )
+}
+
+/**
+ * Runs one action, keeps whatever it refused with, and closes only on success.
+ *
+ * <p>Shared by all four so the failure path cannot drift between them — it would
+ * be easy for one dialog to close on an error and quietly discard the reason.
+ */
+function useAction(onDone: () => void) {
+  const [pending, start] = useTransition()
+  const [error, setError] = useState<string | undefined>()
+
+  const run = (action: () => Promise<ActionState>) => {
+    setError(undefined)
+    start(async () => {
+      const result = await action()
+      if (result?.ok) onDone()
+      else setError(result?.message ?? "Something went wrong. Please try again.")
+    })
+  }
+
+  return { pending, error, setError, run }
+}
+
+/**
  * Moving somebody between roles.
  *
  * <p>A choice rather than a confirmation, so the roles are in the dialog instead
@@ -119,7 +174,9 @@ function ChangeRoleDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { roles, permissionsForRole } = useAccess()
   const [role, setRole] = useState(user.role)
+  const { pending, error, setError, run } = useAction(() => onOpenChange(false))
 
   // Reopening after a cancel should not offer the abandoned choice as though it
   // had been made. Watched on `open` rather than reset in the cancel handler,
@@ -131,14 +188,17 @@ function ChangeRoleDialog({
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) setRole(user.role)
+    if (open) {
+      setRole(user.role)
+      setError(undefined)
+    }
   }
 
   const changed = role !== user.role
   const leavingAdmin = user.role === "ADMIN" && changed
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={pending ? undefined : onOpenChange}>
       <AlertDialogContent>
         <DialogHead
           icon={UserCog}
@@ -151,33 +211,35 @@ function ChangeRoleDialog({
         <TargetCard user={user} />
 
         <div className="flex flex-col gap-2">
-          {ROLES.map((option) => {
-            const selected = option.key === role
-            const count = permissionsForRole(option.key).length
+          {roles.map((option) => {
+            const selected = option.name === role
+            const count = permissionsForRole(option.name).length
 
             return (
               <label
-                key={option.key}
+                key={option.name}
                 className={cn(
                   "flex cursor-pointer flex-col gap-1 rounded-md border p-3 transition-colors",
                   "bg-card hover:bg-muted/40",
-                  selected && "border-foreground/40"
+                  selected && "border-foreground/40",
+                  pending && "pointer-events-none opacity-60"
                 )}
               >
                 <input
                   type="radio"
                   name="role-change"
-                  value={option.key}
+                  value={option.name}
                   checked={selected}
-                  onChange={() => setRole(option.key)}
+                  disabled={pending}
+                  onChange={() => setRole(option.name)}
                   className="sr-only"
                 />
 
                 <span className="flex items-center justify-between gap-2 text-sm font-medium">
-                  {option.label}
+                  {option.name === "ADMIN" ? "Administrator" : "Member"}
                   {/* Says which one they are on now, so "no change" is visible
                       rather than something you work out by remembering. */}
-                  {option.key === user.role && (
+                  {option.name === user.role && (
                     <span className="font-mono text-[0.6rem] tracking-wide text-muted-foreground uppercase">
                       Current
                     </span>
@@ -196,22 +258,29 @@ function ChangeRoleDialog({
           })}
         </div>
 
-        {/* Only for the direction that quietly takes access away. Promoting
-            somebody is visible in what they can suddenly do; demoting them is
-            visible the first time they cannot do something, which is usually
-            during whatever they were in the middle of. */}
-        {leavingAdmin && (
+        {/* Both consequences, said before the button rather than after. The
+            second one is the surprise: changing a role signs the person out, so
+            they will be asked for their password again. */}
+        {changed && (
           <p className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
-            They lose every permission that came with being an administrator.
-            Anything they still need has to be granted to them one at a time.
+            {leavingAdmin
+              ? "They lose every permission that came with being an administrator, and any exception set for them personally is cleared. They will be signed out."
+              : "Any permission set for this person individually is cleared, since it was a difference from the role they are leaving. They will be signed out."}
           </p>
         )}
 
+        <Refusal message={error} />
+
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
           {/* Nothing to save when nothing changed — a live button that does
               nothing teaches people the button does nothing. */}
-          <AlertDialogAction disabled={!changed}>Change role</AlertDialogAction>
+          <AlertDialogAction
+            disabled={!changed || pending}
+            onClick={() => run(() => changeUserRole(user.id, role))}
+          >
+            {pending ? "Changing…" : "Change role"}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -220,9 +289,6 @@ function ChangeRoleDialog({
 
 /**
  * Clearing somebody's second factor so they can enrol again.
- *
- * <p>The one action on this menu with an endpoint already built —
- * `POST /api/users/{id}/2fa/reset`, behind `USER:UPDATE`.
  *
  * <p>The copy leads with the lockout rather than the reset, because that is the
  * part people get wrong. Two-factor is mandatory here: clearing it does not put
@@ -240,8 +306,10 @@ function ResetTwoFactorDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { pending, error, run } = useAction(() => onOpenChange(false))
+
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={pending ? undefined : onOpenChange}>
       <AlertDialogContent size="sm">
         <DialogHead
           icon={ShieldAlert}
@@ -267,10 +335,15 @@ function ResetTwoFactorDialog({
             : "They are already being asked to enrol every time they sign in, and cannot do anything until they finish. If they are stuck, the problem is not their two-factor."}
         </p>
 
+        <Refusal message={error} />
+
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={!user.mfaEnabled}>
-            Reset two-factor
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!user.mfaEnabled || pending}
+            onClick={() => run(() => resetUserTwoFactor(user.id))}
+          >
+            {pending ? "Resetting…" : "Reset two-factor"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -288,9 +361,8 @@ function ResetTwoFactorDialog({
  * administrator generates a password and passes it on.
  *
  * <p>⚠️ The obvious missing half is forcing a change at next sign-in. There is
- * no `must_change_password` column and no endpoint, so the temporary password is
- * simply the password until the person is told to change it — which nothing
- * makes them do. Worth fixing before this is wired up.
+ * no `must_change_password` column, so the temporary password is simply the
+ * password until the person is told to change it — which nothing makes them do.
  */
 function ResetPasswordDialog({
   user,
@@ -302,6 +374,7 @@ function ResetPasswordDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [password, setPassword] = useState("")
+  const { pending, error, setError, run } = useAction(() => onOpenChange(false))
 
   // A fresh one per opening. Reopening and seeing the password from last time
   // suggests it is the account's current password, which it is not — nothing
@@ -310,11 +383,14 @@ function ResetPasswordDialog({
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) setPassword("")
+    if (open) {
+      setPassword("")
+      setError(undefined)
+    }
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={pending ? undefined : onOpenChange}>
       <AlertDialogContent>
         <DialogHead
           icon={KeyRound}
@@ -333,13 +409,91 @@ function ResetPasswordDialog({
 
         <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           Nothing is emailed — this system sends no mail. Send it by a route you
-          trust and ask them to change it once they are in. Their two-factor is
-          untouched, so they still need their authenticator.
+          trust and ask them to change it once they are in. This also signs them
+          out everywhere; their two-factor is untouched, so they still need their
+          authenticator.
         </p>
 
+        <Refusal message={error} />
+
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction>Set this password</AlertDialogAction>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!password || pending}
+            onClick={() => run(() => setUserPassword(user.id, password))}
+          >
+            {pending ? "Saving…" : "Set this password"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+/**
+ * Switching an account off, or back on.
+ *
+ * <p>One dialog for both directions, because they are the same decision read
+ * from opposite ends and a separate "reactivate" dialog would duplicate every
+ * sentence in it.
+ *
+ * <p>The copy is deliberately specific about what deactivation is <em>not</em>.
+ * Nothing is deleted: the row stays, the history stays, and the email address
+ * stays taken so the same person can be turned back on rather than re-created as
+ * a stranger. Someone reaching for this needs to know that before they hesitate
+ * over a button labelled with a word that sounds permanent.
+ */
+function DeactivateUserDialog({
+  user,
+  open,
+  onOpenChange,
+}: {
+  user: ActionTarget
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { pending, error, run } = useAction(() => onOpenChange(false))
+
+  const name = `${user.firstName} ${user.lastName}`
+  const reactivating = user.status !== "ACTIVE"
+  const next = reactivating ? "ACTIVE" : "DEACTIVATED"
+
+  return (
+    <AlertDialog open={open} onOpenChange={pending ? undefined : onOpenChange}>
+      <AlertDialogContent size="sm">
+        <DialogHead
+          icon={UserX}
+          tone={
+            reactivating
+              ? "bg-success/10 text-success"
+              : "bg-destructive/10 text-destructive"
+          }
+          title={reactivating ? "Turn this account back on?" : "Deactivate this account?"}
+        >
+          {reactivating
+            ? `${name} will be able to sign in again, with the same password and the same two-factor as before.`
+            : `${name} will not be able to sign in, and any session they have open ends now. Nothing is deleted — their history stays, and the account can be switched back on later.`}
+        </DialogHead>
+
+        <TargetCard user={user} />
+
+        <Refusal message={error} />
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant={reactivating ? "default" : "destructive"}
+            disabled={pending}
+            onClick={() => run(() => changeUserStatus(user.id, next))}
+          >
+            {pending
+              ? reactivating
+                ? "Turning on…"
+                : "Deactivating…"
+              : reactivating
+                ? "Turn back on"
+                : "Deactivate"}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -383,9 +537,6 @@ function UserActionDialogs({
         user={user}
         open={action === "deactivate"}
         onOpenChange={close}
-        // ⚠️ Nothing happens yet. Deactivating needs a status-change endpoint,
-        // which the backend does not have — see bugForLater.
-        onConfirm={onClose}
       />
     </>
   )

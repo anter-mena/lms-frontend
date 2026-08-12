@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
 import {
   ChevronDown,
   ChevronLeft,
@@ -19,6 +20,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  SquarePen,
   UserCog,
   UserX,
 } from "lucide-react"
@@ -51,21 +53,38 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  DEFAULT_PAGE_SIZE,
+  PAGE_SIZES,
+  type Page,
+  type UserQuery,
+  type UserRow,
+} from "@/lib/userTypes"
 import { THIN_SCROLLBAR } from "@/lib/scrollbar"
 import { cn } from "@/lib/utils"
 
-/** Mirrors the backend's UserResponse. */
-type UserRow = {
-  id: number
-  firstName: string
-  lastName: string
-  email: string
-  role: string
-  status: string
-  mfaEnabled: boolean
-}
+type SortKey =
+  | "id"
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "mfaEnabled"
+  | "status"
+  | "createdAt"
 
-type SortKey = "id" | "firstName" | "lastName" | "email" | "mfaEnabled" | "status"
+/**
+ * Day, month, year — no time.
+ *
+ * <p>Fixed to `en-GB` rather than the visitor's locale, because this renders on
+ * the server as well as in the browser and a component that formats differently
+ * in each produces markup the two disagree about. Spelling the month out also
+ * removes the 05/06 ambiguity a numeric date leaves behind.
+ */
+const JOINED = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+})
 
 /**
  * Centred columns are the ones holding a token rather than prose: an identifier
@@ -80,6 +99,10 @@ const COLUMNS: { key: SortKey; label: string; centred?: boolean }[] = [
   { key: "email", label: "Email" },
   { key: "mfaEnabled", label: "2FA", centred: true },
   { key: "status", label: "Status", centred: true },
+  // Last of the data columns, beside Actions. It is the one the list is sorted
+  // by out of the box, and a table ordered by something it does not show looks
+  // arbitrarily shuffled.
+  { key: "createdAt", label: "Joined", centred: true },
 ]
 
 /**
@@ -88,19 +111,6 @@ const COLUMNS: { key: SortKey; label: string; centred?: boolean }[] = [
  */
 const HEAD =
   "font-mono text-[0.7rem] font-medium tracking-wider text-muted-foreground uppercase"
-
-/**
- * Capped at 15, not the usual 25/50/100.
- *
- * <p>The table lives in a fixed-height panel — the page itself does not scroll —
- * so a page size larger than the panel holds does not show more of anything, it
- * just puts scrolling inside scrolling and makes the page numbers meaningless.
- * These steps stay within what a window can actually display.
- */
-const PAGE_SIZES = [5, 10, 15] as const
-
-/** The middle option: a full page on a laptop without reaching the cap. */
-const DEFAULT_PAGE_SIZE = 10
 
 /**
  * Which page buttons to draw: always the first and last, always the current and
@@ -138,35 +148,6 @@ function pageNumbers(current: number, total: number): (number | "gap")[] {
  */
 const STICKY_HEAD =
   "sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_var(--border)]"
-
-/**
- * Status sorts by where an account sits in its life, not by its spelling.
- * Alphabetical would file Suspended between Pending and Deactivated, which tells
- * nobody anything — the useful order is settled first, trouble last.
- */
-const STATUS_RANK: Record<string, number> = {
-  ACTIVE: 0,
-  PENDING_VERIFICATION: 1,
-  SUSPENDED: 2,
-  DEACTIVATED: 3,
-}
-
-function compare(a: UserRow, b: UserRow, key: SortKey): number {
-  switch (key) {
-    case "id":
-      return a.id - b.id
-    case "mfaEnabled":
-      // Accounts still owing enrolment sort first: they are the ones an
-      // administrator opened this list to find.
-      return Number(a.mfaEnabled) - Number(b.mfaEnabled)
-    case "status":
-      return (STATUS_RANK[a.status] ?? 99) - (STATUS_RANK[b.status] ?? 99)
-    default:
-      // localeCompare, not <, so accented names file where a reader expects
-      // rather than after Z.
-      return a[key].localeCompare(b[key])
-  }
-}
 
 /**
  * One row's menu, and the dialogs it can open.
@@ -215,6 +196,10 @@ function UserRowActions({ user }: { user: UserRow }) {
               <Eye data-icon="inline-start" />
               View details
             </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href={`/users/${user.id}/edit`} />}>
+              <SquarePen data-icon="inline-start" />
+              Edit details
+            </DropdownMenuItem>
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator />
@@ -229,7 +214,7 @@ function UserRowActions({ user }: { user: UserRow }) {
                 the whole picker, which is a screen — and `?user=` is what tells
                 that screen whose permissions it is showing. */}
             <DropdownMenuItem
-              render={<Link href={`/roles-permissions?user=${user.id}`} />}
+              render={<Link href={`/users/${user.id}/permissions`} />}
             >
               <KeySquare data-icon="inline-start" />
               Change permissions
@@ -252,11 +237,11 @@ function UserRowActions({ user }: { user: UserRow }) {
               Reset two-factor
             </DropdownMenuItem>
             <DropdownMenuItem
-              variant="destructive"
+              variant={user.status === "ACTIVE" ? "destructive" : undefined}
               onClick={() => setAction("deactivate")}
             >
               <UserX data-icon="inline-start" />
-              Deactivate
+              {user.status === "ACTIVE" ? "Deactivate" : "Turn back on"}
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
@@ -274,98 +259,128 @@ function UserRowActions({ user }: { user: UserRow }) {
 /**
  * Everyone with an account.
  *
- * <p>Client-side because of selection, search, sorting and the row menus. The
- * data arrives as a prop from the page, which fetched it on the server — so no
- * token reaches the browser and the list is in the first paint rather than after
- * a spinner.
+ * <p>Client-side because of selection, the row menus, and writing to the address
+ * bar. The rows themselves arrive as a prop from the page, which fetched them on
+ * the server — so no token reaches the browser and the list is in the first
+ * paint rather than after a spinner.
  *
- * <p>Search and sort run in memory here. That is right at a dozen users and
- * wrong at a thousand: `GET /api/users` returns every row with no paging, so
- * both have to move server-side before this list grows.
+ * <p><b>Search, sort and paging live in the URL, not in state.</b> They used to
+ * run in memory here, which was right at a dozen invented users and wrong at a
+ * thousand real ones: every row had to be fetched before any of them could be
+ * hidden. Now each of them is a query parameter the server acts on, which also
+ * makes a filtered, sorted page three something you can send to a colleague and
+ * something the Back button restores.
  */
-/** Read off the URL by the page and handed down. See `usersFilter.tsx`. */
-type Filters = {
-  role?: string
-  status?: string
-  /** "on" | "off" — a string because that is what a URL holds. */
-  mfa?: string
-}
-
 function UsersTable({
-  users,
-  filters = {},
+  page,
+  query,
 }: {
-  users: UserRow[]
-  filters?: Filters
+  /** One page of results, already filtered and sorted by the database. */
+  page: Page<UserRow>
+  /** What the address bar currently says. The single source of truth. */
+  query: UserQuery
 }) {
-  const [query, setQuery] = useState("")
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+
+  // Selection is per page and deliberately not in the URL: it is a scratch
+  // decision about rows on screen, not a place you would want to link somebody
+  // to. Changing page clears it, which is the honest behaviour — "select all"
+  // never silently held onto people you had scrolled past.
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
-    key: "id",
-    dir: "asc",
-  })
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE)
-  const [page, setPage] = useState(1)
 
-  const matched = useMemo(() => {
-    const needle = query.trim().toLowerCase()
+  const [sortKey, sortDir] = (query.sort ?? "").split(",")
+  const pageSize = Number(query.size) || DEFAULT_PAGE_SIZE
+  const currentPage = page.page + 1
+  const pageCount = Math.max(1, page.totalPages)
+  const rows = page.content
+  const hasFilters = Boolean(query.role || query.status || query.mfa)
+  const searching = Boolean(query.search)
 
-    // The dropdown filters narrow first, then the search box searches what is
-    // left. Either order gives the same rows; this one means the search reads as
-    // "within what I have filtered to", which is how people describe it.
-    const filtered = users
-      .filter((user) => {
-        if (filters.role && user.role !== filters.role) return false
-        if (filters.status && user.status !== filters.status) return false
-        if (filters.mfa === "on" && !user.mfaEnabled) return false
-        if (filters.mfa === "off" && user.mfaEnabled) return false
-        return true
-      })
-      .filter((user) =>
-        needle
-          ? `${user.firstName} ${user.lastName} ${user.email} ${user.role}`
-              .toLowerCase()
-              .includes(needle)
-          : true
-      )
+  /**
+   * Writes one parameter and reloads from the server.
+   *
+   * <p>Any change except the page number sends you back to page one. Page 4 of
+   * an unfiltered list is rarely page 4 of a filtered one, and landing on an
+   * empty page after narrowing a search looks like the search broke.
+   */
+  function setParam(key: string, value: string | null) {
+    const next = new URLSearchParams(params.toString())
 
-    // Copied before sorting: sort() mutates, and mutating a prop would corrupt
-    // the array the page owns.
-    return [...filtered].sort((a, b) => {
-      const result = compare(a, b, sort.key)
-      return sort.dir === "asc" ? result : -result
-    })
-  }, [users, query, sort, filters.role, filters.status, filters.mfa])
+    if (value === null || value === "") next.delete(key)
+    else next.set(key, value)
 
-  // Clamped rather than reset. Narrowing a search from page 4 down to one page
-  // of results would otherwise leave the table on a page that no longer exists,
-  // showing nothing and looking broken.
-  const pageCount = Math.max(1, Math.ceil(matched.length / pageSize))
-  const currentPage = Math.min(page, pageCount)
-  const start = (currentPage - 1) * pageSize
-  const visible = matched.slice(start, start + pageSize)
+    if (key !== "page") next.delete("page")
 
-  const hasFilters = Boolean(filters.role || filters.status || filters.mfa)
+    setSelected(new Set())
+    router.push(`${pathname}?${next.toString()}`, { scroll: false })
+  }
 
-  const allVisibleSelected =
-    visible.length > 0 && visible.every((u) => selected.has(u.id))
+  /**
+   * What is in the search box right now, which is ahead of the URL.
+   *
+   * <p>Typing has to feel immediate, but each change is a request to the server —
+   * so the field keeps its own value and the URL catches up once the typing
+   * stops. Without this, "cherkaoui" is eleven round trips and the results
+   * flicker through ten wrong answers on the way to the right one.
+   *
+   * <p>Re-seeded from the URL by the key on this component in the page, so
+   * pressing Back actually empties the box rather than leaving a stale word in
+   * a field that is no longer filtering anything.
+   */
+  const [typed, setTyped] = useState(query.search ?? "")
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => {
+    const current = query.search ?? ""
+    if (typed === current) return
+
+    clearTimeout(debounce.current)
+    debounce.current = setTimeout(() => setParam("search", typed || null), 350)
+
+    return () => clearTimeout(debounce.current)
+    // setParam is recreated every render and would restart the timer on each
+    // keystroke, which is the one thing this must not do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typed, query.search])
+
+  /**
+   * Where a download points.
+   *
+   * <p>Carries the filters, so "export" means "export the list I am looking at"
+   * rather than "export everything and find it again in Excel". Paging is left
+   * out on purpose — exporting page 2 of something is nobody's intention.
+   *
+   * <p>Ticked rows narrow it further. That is the only thing the checkboxes do:
+   * they were sitting there counting a selection that nothing acted on.
+   */
+  function exportHref(format: "csv" | "json" | "xlsx") {
+    const next = new URLSearchParams()
+    next.set("format", format)
+
+    for (const key of ["search", "role", "status", "mfa", "sort"] as const) {
+      const value = params.get(key)
+      if (value) next.set(key, value)
+    }
+
+    if (selected.size > 0) next.set("ids", [...selected].join(","))
+
+    return `/api/export/users?${next.toString()}`
+  }
 
   function toggleSort(key: SortKey) {
-    setSort((current) =>
-      current.key === key
-        ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
-        : // A new column starts ascending. Carrying the previous direction over
-          // means clicking a fresh heading can sort it backwards for no visible
-          // reason.
-          { key, dir: "asc" }
-    )
+    const nextDir = sortKey === key && sortDir !== "desc" ? "desc" : "asc"
+    // A new column starts ascending. Carrying the previous direction over means
+    // clicking a fresh heading can sort it backwards for no visible reason.
+    setParam("sort", `${key},${nextDir}`)
   }
 
   function toggleAll(checked: boolean) {
     const next = new Set(selected)
     // Only the rows currently on screen, so a filtered "select all" cannot
     // quietly pick up people the person searching never saw.
-    visible.forEach((u) => (checked ? next.add(u.id) : next.delete(u.id)))
+    rows.forEach((u) => (checked ? next.add(u.id) : next.delete(u.id)))
     setSelected(next)
   }
 
@@ -375,6 +390,9 @@ function UsersTable({
     else next.delete(id)
     setSelected(next)
   }
+
+  const allVisibleSelected =
+    rows.length > 0 && rows.every((u) => selected.has(u.id))
 
   return (
     // Same nesting as the stat cards above, at the same 2px inset — repeating
@@ -411,7 +429,8 @@ function UsersTable({
             </TooltipTrigger>
             <TooltipContent className="max-w-64">
               Everyone with an account. Two-factor is required, so anyone showing
-              Off cannot use the application until they enrol.
+              Off cannot use the application until they enrol. Tick rows to
+              export just those.
             </TooltipContent>
           </Tooltip>
         </p>
@@ -426,8 +445,8 @@ function UsersTable({
               in a row. */}
           <Input
             type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
             placeholder="Search users..."
             aria-label="Search users"
             className="h-8 w-56 rounded-md bg-transparent pl-8"
@@ -458,12 +477,9 @@ function UsersTable({
           <DropdownMenuContent align="end" className="min-w-32">
             <DropdownMenuRadioGroup
               value={String(pageSize)}
-              onValueChange={(value) => {
-                setPageSize(Number(value))
-                // Back to the first page: page 4 of a 10-row list does not
-                // exist once the list shows 100 at a time.
-                setPage(1)
-              }}
+              // setParam already returns to page one, which is what this needs:
+              // page 4 of a 5-row list does not exist once the list shows 15.
+              onValueChange={(value) => setParam("size", value)}
             >
               {PAGE_SIZES.map((size) => (
                 <DropdownMenuRadioItem key={size} value={String(size)}>
@@ -492,19 +508,33 @@ function UsersTable({
           >
             <Ellipsis />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-44">
-            <DropdownMenuItem>
-              <FileText data-icon="inline-start" />
-              Export as CSV
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <FileJson data-icon="inline-start" />
-              Export as JSON
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <FileSpreadsheet data-icon="inline-start" />
-              Export as Excel
-            </DropdownMenuItem>
+          {/* Links, not buttons. A download is a navigation: the browser owns
+              the save dialog and the progress, and nothing has to be held in
+              memory as a blob on the way. */}
+          <DropdownMenuContent align="end" className="min-w-52">
+            {/* Wrapped in a group because the label needs one: Base UI reads its
+                heading from MenuGroupContext, and a bare label throws rather than
+                rendering plainly. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                {selected.size > 0
+                  ? `Export ${selected.size} selected`
+                  : `Export ${page.totalElements} ${page.totalElements === 1 ? "row" : "rows"}`}
+              </DropdownMenuLabel>
+
+              <DropdownMenuItem render={<a href={exportHref("csv")} download />}>
+                <FileText data-icon="inline-start" />
+                CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<a href={exportHref("json")} download />}>
+                <FileJson data-icon="inline-start" />
+                JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<a href={exportHref("xlsx")} download />}>
+                <FileSpreadsheet data-icon="inline-start" />
+                Excel
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -521,7 +551,7 @@ function UsersTable({
           // stretching the table to its container is all it takes to put the
           // message in the middle of the space rather than tucked under the
           // headings. With rows present this would stretch them instead.
-          className={cn(visible.length === 0 && "h-full")}
+          className={cn(rows.length === 0 && "h-full")}
         >
             {/* The row's own border is dropped: with border-collapse a border on
                 a sticky element scrolls away with the content it was collapsed
@@ -538,12 +568,12 @@ function UsersTable({
                 </TableHead>
 
                 {COLUMNS.map(({ key, label, centred }) => {
-                  const active = sort.key === key
+                  const active = sortKey === key
                   const Icon = !active
                     ? ChevronsUpDown
-                    : sort.dir === "asc"
-                      ? ChevronUp
-                      : ChevronDown
+                    : sortDir === "desc"
+                      ? ChevronDown
+                      : ChevronUp
 
                   return (
                     <TableHead
@@ -553,9 +583,9 @@ function UsersTable({
                       // the column, and a button has no such state to report.
                       aria-sort={
                         active
-                          ? sort.dir === "asc"
-                            ? "ascending"
-                            : "descending"
+                          ? sortDir === "desc"
+                            ? "descending"
+                            : "ascending"
                           : "none"
                       }
                     >
@@ -584,21 +614,21 @@ function UsersTable({
             </TableHeader>
 
             <TableBody>
-              {visible.length === 0 ? (
+              {rows.length === 0 ? (
                 <TableRow className="hover:bg-transparent">
                   <TableCell
                     colSpan={COLUMNS.length + 2}
                     className="text-center align-middle text-sm text-muted-foreground"
                   >
-                    {query
-                      ? `No users match "${query}".`
+                    {searching
+                      ? `No users match "${query.search}".`
                       : hasFilters
                         ? "No users match these filters."
                         : "No users yet."}
                   </TableCell>
                 </TableRow>
               ) : (
-                visible.map((user) => (
+                rows.map((user) => (
                   <TableRow
                     key={user.id}
                     data-state={selected.has(user.id) ? "selected" : undefined}
@@ -634,6 +664,10 @@ function UsersTable({
                       <StatusBadge status={user.status} />
                     </TableCell>
 
+                    <TableCell className="text-center text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+                      {user.createdAt ? JOINED.format(new Date(user.createdAt)) : "—"}
+                    </TableCell>
+
                     <TableCell className="pr-4 text-right">
                       <UserRowActions user={user} />
                     </TableCell>
@@ -653,9 +687,9 @@ function UsersTable({
           rows move. */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-1.5 text-[0.7rem] text-muted-foreground">
         <p className="pl-1 tabular-nums">
-          {matched.length === 0
+          {page.totalElements === 0
             ? "No results"
-            : `Showing ${start + 1}–${Math.min(start + pageSize, matched.length)} of ${matched.length}`}
+            : `Showing ${page.page * pageSize + 1}–${page.page * pageSize + rows.length} of ${page.totalElements}`}
         </p>
 
         <div className="flex items-center gap-0.5">
@@ -664,7 +698,7 @@ function UsersTable({
             size="icon-xs"
             className="rounded-md bg-card"
             disabled={currentPage === 1}
-            onClick={() => setPage(currentPage - 1)}
+            onClick={() => setParam("page", String(currentPage - 1))}
             aria-label="Previous page"
           >
             <ChevronLeft />
@@ -685,7 +719,7 @@ function UsersTable({
                   "rounded-md tabular-nums",
                   entry !== currentPage && "bg-card"
                 )}
-                onClick={() => setPage(entry)}
+                onClick={() => setParam("page", String(entry))}
                 aria-label={`Page ${entry}`}
                 aria-current={entry === currentPage ? "page" : undefined}
               >
@@ -699,7 +733,7 @@ function UsersTable({
             size="icon-xs"
             className="rounded-md bg-card"
             disabled={currentPage === pageCount}
-            onClick={() => setPage(currentPage + 1)}
+            onClick={() => setParam("page", String(currentPage + 1))}
             aria-label="Next page"
           >
             <ChevronRight />

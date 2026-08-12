@@ -1,3 +1,5 @@
+"use client"
+
 import { Fragment } from "react"
 import {
   CalendarDays,
@@ -16,11 +18,12 @@ import {
   UserRound,
 } from "lucide-react"
 
-import { initialsOf } from "@/components/layout/userAvatar"
+import { initialsOf } from "@/lib/initials"
 import { UserQuickActions } from "@/components/users/userQuickActions"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { TruncatedText } from "@/components/ui/truncatedText"
-import { ACTION_COLUMNS, RESOURCE_GROUPS } from "@/lib/permissions"
+import { useAccess } from "@/components/access/accessProvider"
+import type { UserDetail as UserAccount } from "@/lib/userTypes"
 import { THIN_SCROLLBAR } from "@/lib/scrollbar"
 import { cn } from "@/lib/utils"
 
@@ -40,36 +43,6 @@ import { cn } from "@/lib/utils"
  * none of them are exposed. Building this for real means adding the endpoint and
  * widening that record.
  */
-
-/**
- * What the screen needs, not what the API returns.
- *
- * <p>The last four are marked because they are the gap: today `UserResponse`
- * stops at `permissions`. Typed as nullable so the page renders honestly against
- * an API that has not caught up — an unknown date shows as "Not recorded" rather
- * than as a crash or a lie.
- */
-type UserDetailData = {
-  id: number
-  firstName: string
-  lastName: string
-  email: string
-  phone: string | null
-  role: string
-  status: string
-  mfaEnabled: boolean
-  permissions: string[]
-  /** ⚠️ Not in `UserResponse` yet. */
-  createdAt: string | null
-  /** ⚠️ Not in `UserResponse` yet. */
-  lastLoginAt: string | null
-  /** ⚠️ Not in `UserResponse` yet. */
-  emailVerifiedAt: string | null
-  /** ⚠️ Not in `UserResponse` yet. */
-  mfaConfirmedAt: string | null
-  /** ⚠️ Nothing records these — see `ActivityEntry`. Newest first. */
-  activity: ActivityEntry[]
-}
 
 /**
  * One thing this account did.
@@ -234,7 +207,21 @@ function Panel({
   )
 }
 
-function UserDetail({ user }: { user: UserDetailData }) {
+function UserDetail({
+  user,
+  activity,
+}: {
+  user: UserAccount
+  /**
+   * ⚠️ Always absent today. Nothing records what an account did — see
+   * {@link ActivityEntry} — so the panel says so rather than showing an empty
+   * list, which would read as "this person has done nothing".
+   */
+  activity?: ActivityEntry[]
+}) {
+  const access = useAccess()
+  const { actionColumns: ACTION_COLUMNS, groups: RESOURCE_GROUPS } = access
+
   const held = new Set(user.permissions)
   const status = STATUS_TEXT[user.status] ?? {
     label: user.status,
@@ -394,7 +381,7 @@ function UserDetail({ user }: { user: UserDetailData }) {
                       </td>
                     </tr>
 
-                    {group.resources.map((resource) => (
+                    {group.modules.map((resource) => (
                       <tr
                         key={resource.key}
                         className="border-b last:border-b-0"
@@ -463,7 +450,16 @@ function UserDetail({ user }: { user: UserDetailData }) {
               verified, last sign-in, all already three inches to the left — so
               the page said everything twice and nothing about the account's
               actual use. */}
-          {user.activity.length === 0 ? (
+          {!activity ? (
+            /* Not "nothing happened" — "nothing is recorded". The difference
+               matters: one is a fact about this person, the other is a gap in
+               the system, and showing an empty list would state the first while
+               meaning the second. */
+            <p className="rounded-md border border-dashed bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+              This system does not keep an activity log yet, so there is nothing
+              to show — for anybody.
+            </p>
+          ) : activity.length === 0 ? (
             <p className="rounded-md border border-dashed bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
               Nothing recorded for this account yet.
             </p>
@@ -476,7 +472,7 @@ function UserDetail({ user }: { user: UserDetailData }) {
                 THIN_SCROLLBAR,
               )}
             >
-              {user.activity.map((entry, index) => (
+              {activity.map((entry, index) => (
                 <LogEntry key={index} entry={entry} />
               ))}
             </ul>
@@ -520,4 +516,4 @@ function LogEntry({ entry }: { entry: ActivityEntry }) {
   )
 }
 
-export { UserDetail, type UserDetailData }
+export { UserDetail, type ActivityEntry }

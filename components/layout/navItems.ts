@@ -23,6 +23,18 @@ export type NavItem = {
 export type NavSection = {
   title: string
   items: NavItem[]
+  /**
+   * Only shown to administrators.
+   *
+   * <p>Not a nicety. Every route under Management is admin-only in the database,
+   * so a member following this link gets a 403 — and a menu entry that always
+   * refuses is worse than no entry: it reads as something they are supposed to
+   * have and cannot, rather than something that was never theirs.
+   *
+   * <p>Hiding it is not what stops them. Middleware refuses the route and the
+   * backend refuses the request; this only decides what to draw.
+   */
+  adminOnly?: boolean
 }
 
 /**
@@ -58,6 +70,7 @@ export const navSections: NavSection[] = [
   },
   {
     title: "Management",
+    adminOnly: true,
     items: [
       { title: "Users", href: "/users", icon: UserCog },
       // Roles & Permissions used to sit here and no longer does. The screen

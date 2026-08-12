@@ -1,84 +1,61 @@
 import type { Metadata } from "next"
+import { forbidden } from "next/navigation"
+import { ShieldAlert } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/pageHeader"
 import { UsersFilter } from "@/components/users/usersFilter"
-import { UsersTable, type UserRow } from "@/components/users/usersTable"
-import { apiFetch } from "@/lib/api"
+import { UsersTable } from "@/components/users/usersTable"
 import { requireUser } from "@/lib/auth"
+import { listUsers, type UserQuery } from "@/lib/users"
 
 export const metadata: Metadata = {
   title: "User management",
 }
 
 /**
- * ⚠️ Flip to `false` to show the real accounts from the backend.
- *
- * <p>Typed as `boolean` rather than inferred, or TypeScript narrows it to the
- * literal `true` and marks the live branch below as unreachable — which is
- * exactly the code that must not rot while this is switched on.
- */
-const USE_PLACEHOLDER_USERS: boolean = true
-
-/**
- * ⚠️ Invented people, for looking at the table with.
- *
- * <p>The real accounts are six test users who are all ACTIVE with 2FA on, so
- * they exercise one row style out of six. This set deliberately covers every
- * state the table can render — each status, both 2FA states, all three roles,
- * and long names against short ones — because those are the rows that break a
- * layout, and none of them exist yet in the real data.
- */
-const PLACEHOLDER_USERS: UserRow[] = [
-  { id: 1, firstName: "Sarah", lastName: "Amrani", email: "sarah.amrani@nordencapital.com", role: "ADMIN", status: "ACTIVE", mfaEnabled: true },
-  { id: 2, firstName: "Youssef", lastName: "Benali", email: "youssef.benali@nordencapital.com", role: "MANAGER", status: "ACTIVE", mfaEnabled: true },
-  { id: 3, firstName: "Imane", lastName: "Belkacem", email: "imane.belkacem@nordencapital.com", role: "MANAGER", status: "ACTIVE", mfaEnabled: true },
-  { id: 4, firstName: "Thomas", lastName: "Van Der Berg", email: "thomas.vanderberg@nordencapital.com", role: "MEMBER", status: "ACTIVE", mfaEnabled: false },
-  { id: 5, firstName: "Nadia", lastName: "Cherkaoui", email: "nadia.cherkaoui@nordencapital.com", role: "MEMBER", status: "PENDING_VERIFICATION", mfaEnabled: false },
-  { id: 6, firstName: "Marcus", lastName: "Lindqvist", email: "marcus.lindqvist@nordencapital.com", role: "MEMBER", status: "ACTIVE", mfaEnabled: true },
-  { id: 7, firstName: "Fatima", lastName: "El Idrissi", email: "fatima.elidrissi@nordencapital.com", role: "MANAGER", status: "ACTIVE", mfaEnabled: true },
-  { id: 8, firstName: "Daniel", lastName: "Okonkwo", email: "daniel.okonkwo@nordencapital.com", role: "MEMBER", status: "SUSPENDED", mfaEnabled: true },
-  { id: 9, firstName: "Léa", lastName: "Moreau", email: "lea.moreau@nordencapital.com", role: "MEMBER", status: "ACTIVE", mfaEnabled: false },
-  { id: 10, firstName: "Karim", lastName: "Ouazzani", email: "karim.ouazzani@nordencapital.com", role: "MEMBER", status: "PENDING_VERIFICATION", mfaEnabled: false },
-  { id: 11, firstName: "Sofia", lastName: "Hernández", email: "sofia.hernandez@nordencapital.com", role: "MEMBER", status: "ACTIVE", mfaEnabled: true },
-  { id: 12, firstName: "James", lastName: "Whitfield", email: "james.whitfield@nordencapital.com", role: "MEMBER", status: "SUSPENDED", mfaEnabled: false },
-]
-
-/**
  * Everyone with an account, and what may be done to them.
  *
- * <p>Lives at `/users` because that is where the sidebar has pointed since it was
- * written — the link has been a 404 until now.
+ * <p>Fetched here rather than in the table, so the token stays on the server and
+ * the list is in the first paint instead of arriving after one.
  *
- * <p>Guarded by `requireUser()` like every other signed-in page. That is not the
- * whole story though: reading the user list needs the `USER:READ` permission,
- * which only ADMIN and MANAGER hold, so a MEMBER reaching this page would be
- * refused by the backend rather than by the route. Deciding what a MEMBER should
- * see here — a plain refusal, or no sidebar entry at all — is part of building
- * this properly.
+ * <p><b>Everything the list does happens in the database.</b> Search, filters,
+ * sorting and paging all travel as query parameters and come back as one page.
+ * The alternative — fetching every account and narrowing it in the browser — was
+ * what this did while the data was invented, and it stops working at the size
+ * where any of it starts to matter.
+ *
+ * <p>Reading the list needs `USER:READ`, which only an administrator holds — it
+ * belongs to Management, and that module is marked admin-only in the database, so
+ * it cannot be granted to a member individually either. A member who reaches this
+ * address gets a real 403 rather than an empty table that looks like the company
+ * has nobody in it.
  */
 export default async function UsersPage({
   searchParams,
 }: {
-  // Filters travel in the URL so the button beside the title and the table below
-  // it need no shared state — see UsersFilter.
-  searchParams: Promise<{ role?: string; status?: string; mfa?: string }>
+  // Every knob the table and filter panel own. They write here and read from
+  // here, which is what lets two components that never meet stay in step.
+  searchParams: Promise<UserQuery>
 }) {
   await requireUser()
 
-  const filters = await searchParams
+  const query = await searchParams
+  const result = await listUsers(query)
 
-  // Fetched here rather than in the table, so the token stays on the server and
-  // the list is in the first paint instead of arriving after one.
+  // A real 403, not a page that renders normally and apologises in the middle.
   //
-  // Still fetched while placeholders are on: it keeps the request, the typing
-  // and the 403 branch honest, so switching back is one constant rather than a
-  // rediscovery of whatever broke in the meantime.
-  const result = await apiFetch<UserRow[]>("/api/users", { authenticated: true })
-  const users = USE_PLACEHOLDER_USERS
-    ? PLACEHOLDER_USERS
-    : result.ok
-      ? result.data
-      : []
+  // The distinction matters: this is not "the list is empty" or "something went
+  // wrong", it is "this screen is not yours". Next's own interrupt renders
+  // `app/forbidden.tsx` and returns the status to match, so the address bar, the
+  // browser history and anything reading the response all agree with the sentence
+  // on screen.
+  //
+  // Only 403. A backend that is down is an outage, not a refusal, and telling
+  // somebody they lack permission when the server is simply unreachable sends
+  // them to ask an administrator for something that would not help.
+  if (!result.ok && result.error.status === 403) {
+    forbidden()
+  }
 
   return (
     // h-full + overflow-hidden: this page takes exactly the room the shell gives
@@ -96,19 +73,26 @@ export default async function UsersPage({
         actions={<UsersFilter />}
       />
 
-      {/* Listing users needs USER:READ, which a MEMBER does not hold. Saying so
-          plainly beats an empty table that looks like the company has nobody in
-          it — and beats crashing the page over a permission working correctly. */}
-      {USE_PLACEHOLDER_USERS || result.ok ? (
-        <UsersTable users={users} filters={filters} />
+      {result.ok ? (
+        // Keyed on the query, so the search box is re-seeded from the URL when
+        // the Back button changes it. Without this a stale word sits in a field
+        // that is no longer filtering anything.
+        <UsersTable
+          key={JSON.stringify(query)}
+          page={result.data}
+          query={query}
+        />
       ) : (
-        <div className="rounded-xl border bg-card p-8 text-center">
-          <p className="text-sm font-medium">Cannot show the user list</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {result.error.status === 403
-              ? "Your role does not include permission to view user accounts."
-              : result.error.message}
-          </p>
+        /* Everything except a refusal, which was handled above. In practice that
+           means the backend is unreachable or broke — an outage, and worth
+           showing here rather than throwing the whole page away, because the
+           header and the sidebar around it still work. */
+        <div className="flex flex-1 items-start justify-center">
+          <div className="flex max-w-md flex-col items-center gap-2 rounded-md border bg-card p-8 text-center">
+            <ShieldAlert className="size-5 text-warning" aria-hidden />
+            <p className="text-sm font-medium">Cannot show the user list</p>
+            <p className="text-sm text-muted-foreground">{result.error.message}</p>
+          </div>
         </div>
       )}
     </div>

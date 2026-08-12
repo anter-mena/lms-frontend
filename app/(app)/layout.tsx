@@ -6,6 +6,7 @@ import {
 } from "@/components/layout/identityCard"
 import { AppShell } from "@/components/layout/appShell"
 import { UserAvatar, UserAvatarSkeleton } from "@/components/layout/userAvatar"
+import { currentUser } from "@/lib/auth"
 
 /**
  * Shell for signed-in pages. The markup and the sidebar's open/closed state
@@ -25,13 +26,22 @@ import { UserAvatar, UserAvatarSkeleton } from "@/components/layout/userAvatar"
  * immediately and fill in when the user resolves, instead of the whole shell
  * waiting on one API call.
  */
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Awaited here rather than suspended like the two below, because it decides
+  // which menu to build — and a sidebar that grows a section after it has
+  // painted is worse than one that waits a moment for the right shape.
+  //
+  // It costs nothing extra: `currentUser` shares the same per-request cache the
+  // identity card and avatar already use, so this is one call between the three.
+  const user = await currentUser()
+
   return (
     <AppShell
+      isAdmin={user?.role === "ADMIN"}
       identity={
         <Suspense fallback={<IdentityCardSkeleton />}>
           <IdentityCard />

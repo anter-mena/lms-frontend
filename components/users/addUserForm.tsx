@@ -1,69 +1,32 @@
 "use client"
 
-import { useState } from "react"
+import { useActionState, useState } from "react"
+import { CircleAlert } from "lucide-react"
+import { createUser } from "@/app/(app)/users/actions"
+import { IDLE, type ActionState } from "@/lib/actionState"
+import { Section } from "@/components/users/formSection"
 import { GeneratedPassword } from "@/components/users/generatedPassword"
 import { PermissionPicker } from "@/components/users/permissionPicker"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { TopBanner } from "@/components/ui/topBanner"
-import {
-  ROLES,
-  permissionsForRole,
-  roleGrantsEverything,
-} from "@/lib/permissions"
+import { useAccess } from "@/components/access/accessProvider"
 import { cn } from "@/lib/utils"
 
 /**
  * Creating an account: who they are, what they may do, and how they first get in.
  *
- * <p>⚠️ Nothing is submitted yet. There is no endpoint that creates an account
- * with a chosen role — registration always hands out MEMBER — so this is the
- * shape of the form and not yet a working one.
+ * <p>Submits to `POST /api/users`, which is not the registration endpoint:
+ * that one always hands out MEMBER, because letting a caller choose their own
+ * role would let anybody sign up as an administrator. This one needs
+ * `USER:CREATE` and chooses the role deliberately.
+ *
+ * <p>⚠️ The permission grid below is <b>not</b> submitted with the form. Creating
+ * an account and setting somebody's exceptions are two different requests, and
+ * the second one needs an id that does not exist until the first has finished —
+ * so the ticks here are read after the account is created. See the note on the
+ * submit handler.
  */
-
-/**
- * A titled panel, in the same nested shape the stat cards and the table use.
- *
- * <p>The heading sits on the grey shell rather than inside the white card. That
- * is what the two layers are for: the outer one says what this is, the inner one
- * holds what you actually touch. With the heading inside, the grey was a 2px rim
- * doing nothing and the card had a label glued to its own contents.
- *
- * <p>Padded to `px-4` so the heading's left edge lands on the same line as the
- * fields below it — the inner card's own `p-4` starts from the same 2px inset,
- * so any other value would have them a few pixels out of step.
- *
- * <p>`flex-1` on the card is what lets a section fill a row rather than stopping
- * at its content. Side by side, the shorter of two sections would otherwise end
- * early and leave the grey shell hanging below it.
- */
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="flex flex-col rounded-md border bg-muted/40 p-0.5">
-      {/* The page header's treatment, one level down: same sizes, same weight,
-          same gap. The old pairing had a tiny mono label over a text-sm sentence,
-          so the description outweighed the thing it described. */}
-      <div className="flex flex-col gap-1 px-4 pt-3 pb-3">
-        <h2 className="font-heading text-lg font-semibold tracking-tight">
-          {title}
-        </h2>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-4 rounded-sm border bg-card p-4">
-        {children}
-      </div>
-    </section>
-  )
-}
 
 /** Member, the one that grants nothing. New accounts start with no access. */
 const DEFAULT_ROLE = "MEMBER"
@@ -79,6 +42,13 @@ const DEFAULT_ROLE = "MEMBER"
 const ADD_USER_FORM_ID = "add-user-form"
 
 function AddUserForm() {
+  const { roles, permissionsForRole, roleGrantsEverything } = useAccess()
+
+  const [state, submit, pending] = useActionState<ActionState, FormData>(
+    async (_previous, formData) => createUser(formData),
+    IDLE
+  )
+
   const [role, setRole] = useState(DEFAULT_ROLE)
   const [permissions, setPermissions] = useState<Set<string>>(
     () => new Set(permissionsForRole(DEFAULT_ROLE))
@@ -98,7 +68,51 @@ function AddUserForm() {
     // Width is the page's business now, not the form's — the header above has to
     // line up with it, and two components each holding their own max-width is
     // how those quietly drift apart.
-    <form id={ADD_USER_FORM_ID} className="flex w-full flex-col gap-4">
+    <form
+      id={ADD_USER_FORM_ID}
+      action={submit}
+      className="flex w-full flex-col gap-4"
+    >
+      {/* Whatever the backend said, unchanged. Its refusals are specific and
+          worth reading — "An account with this email already exists." tells you
+          what to do next in a way "Could not create user" never does. */}
+      {state.message && !state.ok && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <div className="flex flex-col gap-1">
+            <span>{state.message}</span>
+
+            {/* Which field, and why. Without this the backend's generic
+                "the request contains invalid fields" is the whole answer, and
+                whoever is looking at it has to guess which of six boxes it
+                means. */}
+            {state.fieldErrors && (
+              <ul className="flex flex-col gap-0.5 text-xs">
+                {Object.entries(state.fieldErrors).map(([field, problem]) => (
+                  <li key={field}>
+                    <span className="font-medium capitalize">
+                      {field.replace(/([A-Z])/g, " $1").toLowerCase()}
+                    </span>
+                    {" — "}
+                    {problem}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* The role travels as a hidden field as well as a checked radio, because
+          the visible radios are `sr-only` inside their labels and a form reads
+          whichever it finds — this makes it unambiguous. */}
+      <input type="hidden" name="role" value={role} />
+
+      <fieldset disabled={pending} className="contents">
       {/* The same bar the sign-in screen uses, in the same place — across the
           top of the window. Being `fixed` it takes no room in this column, so
           the form does not shift down when Administrator is picked.
@@ -142,47 +156,52 @@ function AddUserForm() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              required
-              placeholder="sarah.amrani@nordencapital.com"
-              className="h-8 rounded-md"
-            />
-            <p className="text-xs text-muted-foreground">
-              Used to sign in, and it cannot be changed later by the account
-              itself.
-            </p>
-          </div>
+          {/* The two ways to reach this person, on one row — the same pairing
+              the names above use, so the section reads as two rows of two
+              rather than two fields and then a ladder.
 
-          {/* Its own row rather than sharing one with the email: the column is
-              already narrow beside Role, and an email in half of it wraps.
+              `items-start` so the email's note hangs below its own field
+              instead of stretching the phone column to match it. */}
+          <div className="grid items-start gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="sarah.amrani@nordencapital.com"
+                className="h-8 rounded-md"
+              />
+              <p className="text-xs text-muted-foreground">
+                Used to sign in, and it cannot be changed later by the account
+                itself.
+              </p>
+            </div>
 
-              `tel`, not `text` — it brings up the phone keypad on a handset and
-              stops a browser offering an email address here. Optional because
-              the column is nullable, and because an account works without one:
-              nothing signs in or recovers by phone in this system. */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="phone">
-              Phone
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                — optional
-              </span>
-            </Label>
-            <Input
-              id="phone"
-              name="phone"
-              type="tel"
-              // The column is varchar(20), so the field says so rather than
-              // letting the backend be the first to mention it.
-              maxLength={20}
-              placeholder="+212 6 12 34 56 78"
-              className="h-8 rounded-md"
-            />
+            {/* `tel`, not `text` — it brings up the phone keypad on a handset
+                and stops a browser offering an email address here. Optional
+                because the column is nullable, and because an account works
+                without one: nothing signs in or recovers by phone here. */}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="phone">
+                Phone
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  — optional
+                </span>
+              </Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                // The column is varchar(20), so the field says so rather than
+                // letting the backend be the first to mention it.
+                maxLength={20}
+                placeholder="+212 6 12 34 56 78"
+                className="h-8 rounded-md"
+              />
+            </div>
           </div>
 
           {/* The password belongs here rather than in a section of its own: it
@@ -190,7 +209,11 @@ function AddUserForm() {
               generated, copied, handed over. */}
           <div className="flex flex-col gap-1.5 border-t pt-4">
             <Label>Temporary password</Label>
-            <GeneratedPassword value={password} onChange={setPassword} />
+            <GeneratedPassword
+              name="password"
+              value={password}
+              onChange={setPassword}
+            />
           </div>
         </Section>
 
@@ -206,13 +229,13 @@ function AddUserForm() {
               Details column sets rather than sitting at the top with a pool of
               empty card underneath them. */}
           <div className="flex flex-1 flex-col gap-2">
-            {ROLES.map((option) => {
-              const selected = option.key === role
-              const count = permissionsForRole(option.key).length
+            {roles.map((option) => {
+              const selected = option.name === role
+              const count = permissionsForRole(option.name).length
 
               return (
                 <label
-                  key={option.key}
+                  key={option.name}
                   className={cn(
                     // flex-1 rather than a natural height: `flex: 1 1 0%` makes
                     // both cards exactly equal whatever their text does, so
@@ -226,14 +249,18 @@ function AddUserForm() {
                 >
                   <input
                     type="radio"
-                    name="role"
-                    value={option.key}
+                    // Deliberately not `name="role"`: the hidden field above
+                    // carries that, and two inputs of the same name submit two
+                    // values. This one exists for the keyboard and the screen
+                    // reader, which need a real radio group to move through.
+                    name="role-choice"
+                    value={option.name}
                     checked={selected}
-                    onChange={() => chooseRole(option.key)}
+                    onChange={() => chooseRole(option.name)}
                     className="sr-only"
                   />
                   <span className="flex items-center justify-between text-sm font-medium">
-                    {option.label}
+                    {option.name === "ADMIN" ? "Administrator" : "Member"}
                     <span
                       aria-hidden
                       className={cn(
@@ -280,6 +307,7 @@ function AddUserForm() {
           />
         </Section>
       )}
+      </fieldset>
     </form>
   )
 }

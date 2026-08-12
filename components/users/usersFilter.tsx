@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ROLES } from "@/lib/permissions"
+import { useAccess } from "@/components/access/accessProvider"
 import { cn } from "@/lib/utils"
 
 /**
@@ -78,6 +78,7 @@ function RadioDot({ selected }: { selected: boolean }) {
 const KEYS = ["role", "status", "mfa"] as const
 
 function UsersFilter() {
+  const { roles } = useAccess()
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
@@ -159,8 +160,8 @@ function UsersFilter() {
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            {ROLES.map((role) => {
-              const selected = selectedRole === role.key
+            {roles.map((role) => {
+              const selected = selectedRole === role.name
 
               return (
                 // The mark is pushed to the card's right edge, matching the role
@@ -168,7 +169,7 @@ function UsersFilter() {
                 // and the marks line up in their own column down the right,
                 // which is what makes the selected one findable at a glance.
                 <label
-                  key={role.key}
+                  key={role.name}
                   className={cn(
                     "flex cursor-pointer items-start justify-between gap-2 rounded-md border p-2 transition-colors",
                     // The fill stays put whatever is chosen. Now the panel
@@ -184,14 +185,16 @@ function UsersFilter() {
                     type="radio"
                     name="role-filter"
                     checked={selected}
-                    onChange={() => set("role", role.key)}
+                    onChange={() => set("role", role.name)}
                     className="sr-only"
                   />
 
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-xs font-medium">{role.label}</span>
+                    <span className="text-xs font-medium">
+                      {role.name === "ADMIN" ? "Administrator" : "Member"}
+                    </span>
                     <span className="text-[0.7rem] leading-tight text-muted-foreground">
-                      {role.key === "ADMIN"
+                      {role.name === "ADMIN"
                         ? "Full access"
                         : "Only what they are given"}
                     </span>

@@ -80,13 +80,21 @@ function AppSidebar({
   open,
   onToggle,
   identity,
+  isAdmin = false,
 }: {
   open: boolean
   onToggle: () => void
   /** The identity card, rendered on the server and handed down by the layout. */
   identity?: React.ReactNode
+  /** Decides whether the admin-only sections are drawn at all. */
+  isAdmin?: boolean
 }) {
   const pathname = usePathname()
+
+  // Filtered rather than dimmed or disabled. A greyed-out menu item invites
+  // somebody to work out how to earn it, and here there is nothing to earn:
+  // Management comes with being an administrator or not at all.
+  const sections = navSections.filter((section) => isAdmin || !section.adminOnly)
 
   return (
     <aside
@@ -125,7 +133,7 @@ function AppSidebar({
             SCROLLBAR
           )}
         >
-          {navSections.map((section, index) => (
+          {sections.map((section, index) => (
             <div
               key={section.title}
               className={cn(
