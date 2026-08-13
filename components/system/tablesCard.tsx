@@ -36,7 +36,18 @@ function TablesCard({ tables }: { tables: SystemHealth["database"]["tables"] }) 
           {tables.length} tables
         </span>
       }
-      className="lg:min-h-0 lg:flex-1"
+      // This card is the shock absorber for the whole Database tab: it is the
+      // only thing allowed to shrink, so a shorter window takes rows off it
+      // instead of putting a scrollbar on the tab.
+      //
+      // The floor is where that stops being a kindness. Squeezed past 9rem the
+      // table is a header and a sliver, which is worse than admitting the window
+      // is too short — below it the tab overflows and scrolls.
+      //
+      // min-h-36 replaces the min-h-0 that used to be here rather than sitting
+      // beside it; two min-heights on one element is a coin toss decided by
+      // stylesheet order.
+      className="lg:min-h-36 lg:flex-1"
       bodyClassName="p-0"
     >
       {/* Scrolls inside the card rather than growing it. Nine tables fit today;

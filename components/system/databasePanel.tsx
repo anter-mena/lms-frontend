@@ -20,11 +20,22 @@ function DatabasePanel({ health }: { health: SystemHealth }) {
     server.diskTotal > 0 ? (database.onDiskBytes / server.diskTotal) * 100 : 0
 
   return (
-    // min-h-full rather than h-full, so a short window scrolls instead of
-    // clipping — see the PANEL note in systemOverview. The tables card inside
-    // keeps its own scrollbar; the browser gives it the wheel first and only
-    // chains out here once it reaches the end.
-    <div className="grid gap-4 lg:min-h-full lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+    // The one tab that does NOT grow to fit its content, deliberately.
+    //
+    // Everything here is a fixed handful of rows except the tables card, which
+    // is built to absorb whatever height is left over and scroll inside itself.
+    // So a shorter window should squeeze that card, not start scrolling the tab
+    // — one scrollbar in a known place beats the whole panel sliding about.
+    //
+    // `h-full` is what makes that happen: the grid is exactly the tab's height,
+    // and the two columns below carry `min-h-0` so they may shrink past their
+    // content — which is the permission the tables card needs to give up space.
+    //
+    // The safety net lives on the tables card itself rather than here, as a
+    // minimum height it will not shrink past. A floor on this grid was the wrong
+    // place for it: it made the whole tab scroll at window heights where the
+    // table still had plenty of room left to give.
+    <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div className="flex flex-col gap-4 lg:min-h-0">
         <Panel title="Storage" bodyClassName="gap-3">
           <StatRow

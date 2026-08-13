@@ -117,7 +117,7 @@ function ContainerCard({
           {container.health || container.state}
         </span>
       }
-      bodyClassName="gap-3 p-3"
+      bodyClassName="gap-2 p-3"
     >
       <p className="truncate font-mono text-[0.65rem] text-muted-foreground">
         {container.image}
@@ -132,7 +132,7 @@ function ContainerCard({
       )}
 
       {running && (
-      <div className="flex flex-col gap-1 lg:min-h-0 lg:flex-1">
+      <div className="flex flex-col gap-1">
         <div className="flex items-baseline justify-between gap-3">
           <HintedLabel label="CPU" className="text-xs text-muted-foreground">
             Share of the whole machine, so 100% would mean every core.
@@ -142,11 +142,13 @@ function ContainerCard({
           </span>
         </div>
 
-        {/* The part that absorbs a taller card. Everything else here is a fixed
-            row of text, so if the graph did not grow the slack would come out as
-            a gap in the middle of the card. */}
+        {/* A fixed height, deliberately. This used to grow to fill the card,
+            which on a tall screen with three containers meant a graph roughly
+            400px high — a wall of chart carrying about as much meaning as a
+            fifth of it. Only the shape of the last five minutes is being read
+            here, and a shape stays legible far smaller than a value would. */}
         <Sparkline
-          className="h-10 lg:h-auto lg:min-h-10 lg:flex-1"
+          className="h-10 sm:h-14"
           values={history.map((s) => s.containerCpu[container.name] ?? 0)}
           // A fixed 0–100 axis would flatten every one of these into a flat line
           // at the bottom: a container at 2% of a four-core box is doing real
@@ -174,7 +176,7 @@ function ContainerCard({
         />
       )}
 
-      <div className="mt-auto flex flex-col gap-2 border-t pt-3">
+      <div className="mt-auto flex flex-col gap-1.5 border-t pt-2.5">
         <Row
           label="Restarts"
           hint="Times Docker has restarted it. Climbing on its own means crashing."
@@ -270,19 +272,19 @@ function ContainersPanel({
           contents are not known in advance, and it holds three containers today
           and however many the machine grows later.
 
-          Rows are `minmax(18rem, 1fr)` for the same reason. `1fr` makes three
-          cards fill the tab the way every other tab does instead of sitting in a
-          band across the top; the 18rem floor stops a long list squeezing them
-          into unreadable strips.
+          Rows size to their content, and deliberately do not stretch to fill the
+          tab. This is the one tab where filling is wrong: the other three hold a
+          fixed set of panels, so stretching them uses the space, while this one
+          holds a list. Stretching a list of three short cards over the full
+          height inflates each one to hide the fact that there are only three,
+          which is information, not a gap to be papered over.
 
-          ⚠️ `flex-1` WITHOUT `min-h-0`, which is deliberate. `min-h-0` lets a
-          flex item shrink below its content: the grid box would be capped at the
-          visible height while its rows kept their 18rem floor, so the extra rows
-          would spill out past the bottom of a box that measured itself as full —
-          nothing to scroll, and cards you cannot reach. Left at the default
-          `min-height: auto` the grid stays as tall as its rows need, which is
-          what the tab panel above then has something to scroll. */}
-      <div className="grid gap-4 lg:flex-1 [grid-auto-rows:minmax(18rem,1fr)] [grid-template-columns:repeat(auto-fit,minmax(min(20rem,100%),1fr))]">
+          Cards in the same row still match each other's height — grid stretches
+          items within a row by default — so the result is even, just not tall.
+
+          Nothing here caps its own height either, which is what lets the tab
+          panel above scroll once the list outgrows the window. */}
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(20rem,100%),1fr))]">
         {shown.map((container) => (
           <ContainerCard
             key={container.id}
