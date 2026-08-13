@@ -1,16 +1,9 @@
 "use client"
 
-import {
-  Boxes,
-  CircleAlert,
-  Cpu,
-  Gauge,
-  HardDrive,
-  MemoryStick,
-  Server,
-} from "lucide-react"
+import { Cpu, Gauge, HardDrive, MemoryStick, Server } from "lucide-react"
 
 import { BackendPanel } from "@/components/system/backendPanel"
+import { ContainersPanel } from "@/components/system/containersPanel"
 import { DatabasePanel } from "@/components/system/databasePanel"
 import { Donut } from "@/components/system/donut"
 import { Panel } from "@/components/system/panel"
@@ -21,6 +14,7 @@ import {
 } from "@/components/system/useSystemHealth"
 import { HintedLabel } from "@/components/ui/hint"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TopBanner } from "@/components/ui/topBanner"
 import { bitsPerSecond, bytes, duration, percent } from "@/lib/format"
 import { THIN_SCROLLBAR } from "@/lib/scrollbar"
 import type { SystemHealth } from "@/lib/systemTypes"
@@ -46,16 +40,22 @@ import { cn } from "@/lib/utils"
  */
 
 /**
- * From lg, every tab fills the page exactly and nothing here scrolls.
+ * From lg, every tab fills the page — and scrolls if it cannot.
  *
- * <p>`overflow-hidden`, not `auto`: whichever panel inside a tab is meant to
- * scroll can only do so if nothing above it will scroll first. A scrollable
- * ancestor takes the wheel and the inner region never receives it.
+ * <p>This was `overflow-hidden`, on the theory that a scrollable ancestor would
+ * steal the wheel from the table inside the Database tab. It does not: the
+ * browser scrolls the innermost scrollable thing under the pointer and only
+ * chains outwards once that reaches its end. What `hidden` actually bought was a
+ * short window silently cutting off the bottom of a tab with no way to reach it.
  *
- * <p>Below lg none of that applies — the columns collapse into one, the content
- * is taller than any phone, and the page scrolls instead.
+ * <p>It only works paired with `min-h-full` rather than `h-full` on each tab's
+ * root — see {@link ServerPanel}. `h-full` pins the content to the visible
+ * height, so it overflows its own box and there is nothing here to scroll.
+ *
+ * <p>Below lg none of this applies — the columns collapse into one, the content
+ * is taller than any phone, and the page itself scrolls.
  */
-const PANEL = cn("min-h-0 lg:flex-1 lg:overflow-hidden", THIN_SCROLLBAR)
+const PANEL = cn("min-h-0 lg:flex-1 lg:overflow-y-auto", THIN_SCROLLBAR)
 
 /** One labelled fact in the Server panel. */
 function Fact({
@@ -158,7 +158,13 @@ function ServerPanel({
     // The left holds what the machine *is* — specifications and how full its disk
     // is, neither of which moves minute to minute. The right holds what it is
     // *doing*, which is what you came to watch.
-    <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+    //
+    // `min-h-full`, not `h-full`: "at least the height of the tab, more if the
+    // content needs it". With `h-full` a laptop window short enough to squeeze
+    // the two left-hand cards had the Disk card cut off at the bottom with no
+    // scrollbar anywhere — the box was exactly the visible height, so nothing
+    // ever registered as overflowing.
+    <div className="grid gap-4 lg:min-h-full lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div className="flex flex-col gap-4">
         <Panel
           title="Server"
@@ -283,11 +289,18 @@ function ServerPanel({
         <Panel
           title="Bandwidth"
           hint={
-            <>
-              Rate from <span className="font-mono">/proc/net/dev</span>. ⚠️ That
-              file is namespaced, so this is the container&rsquo;s traffic, not
-              the machine&rsquo;s.
-            </>
+            server.networkIsHost ? (
+              <>
+                The machine&rsquo;s real interfaces. Docker&rsquo;s virtual ones
+                are left out — a request crosses three of them and would be
+                counted three times.
+              </>
+            ) : (
+              <>
+                ⚠️ The application&rsquo;s own traffic, not the
+                machine&rsquo;s — the host counters are not mounted here.
+              </>
+            )
           }
           className="lg:flex-1"
           bodyClassName="gap-2 p-3"
@@ -327,45 +340,6 @@ function ServerPanel({
   )
 }
 
-/**
- * ⚠️ <b>The one layer with nothing behind it.</b>
- *
- * <p>Container status, restart counts and per-container resources all come from
- * Docker, which means either the socket — effectively root on the host — or a
- * read-only proxy in front of it. That is a decision worth making deliberately
- * rather than sliding into, so this tab says what it needs instead of showing
- * invented numbers that look like measurements.
- */
-function ContainersPanel() {
-  return (
-    <Panel
-      className="lg:h-full"
-      title="Containers"
-      hint={
-        <>Needs Docker access, which the backend deliberately does not have.</>
-      }
-      action={
-        <span className="flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
-          <Boxes className="size-3.5" aria-hidden />
-          not connected
-        </span>
-      }
-      bodyClassName="items-center justify-center gap-2 p-8"
-    >
-      <p className="max-w-md text-center text-sm font-medium">
-        This tab has no data source yet
-      </p>
-      <p className="max-w-md text-center text-sm text-muted-foreground">
-        Container status, restart counts and per-container CPU and memory come
-        from Docker. Reading them means mounting the Docker socket — which grants
-        the backend root on the host — or putting a read-only proxy in front of
-        it. The second is the safe shape, and it is a deliberate decision rather
-        than a default.
-      </p>
-    </Panel>
-  )
-}
-
 function SystemOverview({ initial }: { initial: SystemHealth | null }) {
   const { current, history, error, loading } = useSystemHealth(initial)
 
@@ -380,24 +354,21 @@ function SystemOverview({ initial }: { initial: SystemHealth | null }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {/* The last good reading stays on screen underneath. A blank page during a
-          blip is less useful than stale numbers clearly marked as stale. */}
+          blip is less useful than stale numbers clearly marked as stale.
+
+          The same bar the login page uses, rather than a panel in the column:
+          this is a statement about the page as a whole, and being `fixed` means
+          it does not shove every card down four rows the moment the network
+          hiccups — the graphs stay exactly where they were.
+
+          Keyed on the message so a *different* failure re-opens a banner that
+          was dismissed. Dismissing "connection refused" should not also silence
+          "not authorised" ten seconds later. */}
       {error && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex shrink-0 items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
-        >
-          <CircleAlert
-            className="mt-0.5 size-4 shrink-0 text-warning"
-            aria-hidden
-          />
-          <p>
-            <span className="font-medium">Not updating.</span>{" "}
-            <span className="text-muted-foreground">
-              {error} The figures below are from the last successful reading.
-            </span>
-          </p>
-        </div>
+        <TopBanner
+          key={error}
+          message={`Not updating. ${error} The figures below are from the last successful reading.`}
+        />
       )}
 
       {/* The layer names are the tab labels, because that is how a problem is
@@ -414,7 +385,7 @@ function SystemOverview({ initial }: { initial: SystemHealth | null }) {
           {current && <ServerPanel health={current} history={history} />}
         </TabsContent>
         <TabsContent value="containers" className={PANEL}>
-          <ContainersPanel />
+          {current && <ContainersPanel health={current} history={history} />}
         </TabsContent>
         <TabsContent value="backend" className={PANEL}>
           {current && <BackendPanel health={current} history={history} />}

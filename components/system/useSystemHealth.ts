@@ -44,6 +44,14 @@ export type Sample = {
   networkIn: number
   networkOut: number
   requestsPerMinute: number
+  /**
+   * Per-container CPU, keyed by name.
+   *
+   * <p>A map rather than an array because containers come and go — a deploy
+   * replaces one mid-window, and an array would silently shift every later
+   * reading onto the wrong container's graph.
+   */
+  containerCpu: Record<string, number>
 }
 
 export type SystemHealthState = {
@@ -119,6 +127,17 @@ export function useSystemHealth(initial: SystemHealth | null): SystemHealthState
               ((health.backend.totalRequests - last.health.backend.totalRequests) /
                 seconds) *
                 60
+            ),
+            // Already a percentage when it arrives — the backend works it out
+            // from Docker's cumulative nanosecond counters, the same way this
+            // hook works out the rates above.
+            //
+            // Guarded despite the type saying it is always there: for the few
+            // minutes between deploying this and deploying the backend that
+            // sends it, the field genuinely is absent, and reading `.items` off
+            // undefined would take down the whole page rather than one tab.
+            containerCpu: Object.fromEntries(
+              (health.containers?.items ?? []).map((c) => [c.name, c.cpuPercent])
             ),
           }
 

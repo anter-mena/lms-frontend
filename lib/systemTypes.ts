@@ -27,9 +27,46 @@ export type SystemHealth = {
     processes: number
     /** Since the machine booted, not since the app started. */
     uptimeSeconds: number
-    /** ⚠️ Cumulative bytes, and this container's interface — not the host's. */
+    /** Cumulative bytes. A rate is the difference between two readings. */
     networkIn: number
     networkOut: number
+    /**
+     * Whether the two counters above are the machine's or only this container's.
+     *
+     * <p>`/proc/net` is namespaced, so it takes a mount to read the host's. False
+     * means the mount is missing and the figures are the application's own
+     * traffic — which is a real number answering a much smaller question, so the
+     * screen says which one it is showing.
+     */
+    networkIsHost: boolean
+  }
+  containers: {
+    available: boolean
+    /** Why not, when `available` is false. */
+    detail: string | null
+    /** Empty when unavailable — which is not the claim "nothing is running". */
+    items: {
+      id: string
+      name: string
+      image: string
+      /** running · exited · restarting · paused */
+      state: string
+      /** Docker's own phrasing — "Up 2 weeks (healthy)". */
+      status: string
+      /** healthy · unhealthy · starting, or empty where none is configured. */
+      health: string
+      restarts: number
+      /** Since this container started. A restart resets it. */
+      uptimeSeconds: number
+      /** 0–100 against the whole machine, as `docker stats` reports it. */
+      cpuPercent: number
+      memoryUsed: number
+      /** The machine's total where no limit is set, which is the case here. */
+      memoryLimit: number
+      /** Cumulative since the container started. */
+      networkIn: number
+      networkOut: number
+    }[]
   }
   backend: {
     uptimeSeconds: number

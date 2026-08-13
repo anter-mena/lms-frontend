@@ -24,7 +24,9 @@ function BackendPanel({
     backend.heapMax > 0 ? (backend.heapUsed / backend.heapMax) * 100 : 0
 
   return (
-    <div className="grid gap-4 lg:h-full lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)_auto]">
+    // min-h-full rather than h-full, so a short window scrolls instead of
+    // clipping the bottom row — see the PANEL note in systemOverview.
+    <div className="grid gap-4 lg:min-h-full lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)_auto]">
       <Panel
         title="JVM heap"
         hint={
@@ -55,8 +57,8 @@ function BackendPanel({
         title="Response time"
         hint={
           <>
-            95% of requests finished faster than this. An average would hide the
-            slow tail, which is the part people feel.
+            The slowest endpoint&rsquo;s 95th percentile, not the whole
+            application&rsquo;s. An average would hide the tail people feel.
           </>
         }
         bodyClassName="gap-3 p-3"

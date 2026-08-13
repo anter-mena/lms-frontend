@@ -20,7 +20,11 @@ function DatabasePanel({ health }: { health: SystemHealth }) {
     server.diskTotal > 0 ? (database.onDiskBytes / server.diskTotal) * 100 : 0
 
   return (
-    <div className="grid gap-4 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+    // min-h-full rather than h-full, so a short window scrolls instead of
+    // clipping — see the PANEL note in systemOverview. The tables card inside
+    // keeps its own scrollbar; the browser gives it the wheel first and only
+    // chains out here once it reaches the end.
+    <div className="grid gap-4 lg:min-h-full lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div className="flex flex-col gap-4 lg:min-h-0">
         <Panel title="Storage" bodyClassName="gap-3">
           <StatRow
@@ -76,8 +80,12 @@ function DatabasePanel({ health }: { health: SystemHealth }) {
       <div className="flex flex-col gap-4 lg:min-h-0">
         <Panel title="Activity" bodyClassName="gap-3">
           <StatRow
-            label="Active connections"
-            hint="Against the server's max_connections. Hitting it causes errors, not slowness."
+            // Deliberately not "active": the Backend tab uses that word for the
+            // connections currently running a query, and this counts the idle
+            // ones too. Two meanings of one word across two tabs is how a pool
+            // sitting at its limit gets read as healthy.
+            label="Open connections"
+            hint="Every connection to this database, busy or idle. Hitting the limit causes errors, not slowness."
             value={count(database.activeConnections)}
             detail={`of ${database.maxConnections}`}
             percent={
