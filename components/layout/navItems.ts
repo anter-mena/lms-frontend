@@ -1,4 +1,5 @@
 import {
+  Activity,
   LayoutDashboard,
   LifeBuoy,
   Settings,
@@ -73,6 +74,7 @@ export const navSections: NavSection[] = [
     adminOnly: true,
     items: [
       { title: "Users", href: "/users", icon: UserCog },
+      { title: "System Health", href: "/system-health", icon: Activity },
       // Roles & Permissions used to sit here and no longer does. The screen
       // still exists at /roles-permissions, but changing somebody's permissions
       // only makes sense once you have said whose — so it is reached by
