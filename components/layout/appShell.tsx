@@ -22,6 +22,7 @@ function AppShell({
   identity,
   avatar,
   isAdmin = false,
+  canOpenInbox = false,
 }: {
   children: React.ReactNode
   /** Rendered on the server by the layout — see the note there. */
@@ -35,6 +36,18 @@ function AppShell({
    * signed in, which is what lets it stay a Client Component.
    */
   isAdmin?: boolean
+  /**
+   * Whether to draw the inbox button in the navbar.
+   *
+   * <p>Hidden rather than disabled for somebody without the permission, the same
+   * rule the admin-only menu sections follow: a control that always refuses
+   * reads as something you are supposed to have and cannot, rather than
+   * something that was never yours.
+   *
+   * <p>Hiding it is not what stops them — the page refuses the route. This only
+   * decides what to draw.
+   */
+  canOpenInbox?: boolean
 }) {
   const [open, setOpen] = useState(true)
 
@@ -58,6 +71,7 @@ function AppShell({
             than floating over the breadcrumb. */}
         <AppNavbar
           avatar={avatar}
+          canOpenInbox={canOpenInbox}
           leading={
             !open ? (
               <SidebarTrigger open={false} onToggle={() => setOpen(true)} />

@@ -80,12 +80,10 @@ const UPGRADE_URL = "https://one.google.com/storage"
  * <p>A link rather than a button, and the difference is honest: a button on this
  * screen does something to the backups. This leaves for somebody else's website.
  *
- * <p>⚠️ <b>The blue is hardcoded, and it is the only one in the application.</b>
- * This palette is greyscale plus three meanings — green good, amber warning, red
- * bad — and has no link colour in it. Chosen deliberately for this one link
- * rather than added to the theme. If a second blue link ever appears, promote
- * this to a token in `globals.css` at that moment: two hardcoded blues in two
- * files will not stay the same blue, and nothing will report it when they drift.
+ * <p>The blue is `--info`, a theme token. It was a hardcoded hex here, with a
+ * note saying the second use is what should promote it — the inbox's unread dot
+ * is that second use, so it was promoted. Both now read from one definition
+ * instead of being the same blue only by coincidence.
  *
  * <p>Leaves in a new tab. This is an operations screen, and losing a half-formed
  * thought about backups to a detour through Google's billing pages is a poor
@@ -100,7 +98,7 @@ function Upgrade() {
       // Underlined at rest, not on hover. A link that only announces itself once
       // the pointer is on it cannot be found by somebody looking for it, and is
       // invisible to anybody navigating by keyboard.
-      className="text-xs font-medium text-[#2563eb] underline underline-offset-4 transition-colors hover:text-[#1d4ed8] dark:text-[#60a5fa] dark:hover:text-[#93c5fd]"
+      className="text-xs font-medium text-info underline underline-offset-4 transition-colors hover:text-info/80"
     >
       Upgrade
     </a>

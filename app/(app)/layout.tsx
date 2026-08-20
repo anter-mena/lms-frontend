@@ -42,6 +42,10 @@ export default async function AppLayout({
   return (
     <AppShell
       isAdmin={user?.role === "ADMIN"}
+      // Read from the token rather than from the role. An administrator holds
+      // it because the migration grants ADMIN everything, not because of a check
+      // for the word here — so if that ever changes, the button follows.
+      canOpenInbox={user?.permissions.includes("INBOX:READ") ?? false}
       identity={
         <Suspense fallback={<IdentityCardSkeleton />}>
           <IdentityCard />

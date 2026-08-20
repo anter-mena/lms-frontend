@@ -13,6 +13,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { NewMark } from "@/components/layout/newMark"
 import { Button } from "@/components/ui/button"
 import { LiquidGlassLayers } from "@/components/ui/liquidGlass"
 
@@ -32,15 +33,19 @@ function labelFor(segment: string) {
 function AppNavbar({
   leading,
   avatar,
+  canOpenInbox = false,
 }: {
   leading?: React.ReactNode
   /** The signed-in user's initials, rendered on the server by the layout. */
   avatar?: React.ReactNode
+  /** Whether this account holds `INBOX:READ` — see AppShell. */
+  canOpenInbox?: boolean
 }) {
   // Derived, not hardcoded: this navbar is part of the shell, so it renders on
   // /profile as well as /dashboard, and a fixed "Dashboard" crumb would lie.
   const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
+
 
   return (
     // bg-background is load-bearing now it is sticky: without a background the
@@ -79,7 +84,9 @@ function AppNavbar({
 
       <div className="ml-auto flex items-center gap-2">
         {/* Both buttons are deliberately identical — they are peers, and any
-            divergence would read as one of them meaning something different. */}
+            divergence would read as one of them meaning something different.
+            Note that only one of them goes anywhere yet: notifications have no
+            screen to open. */}
         <Button
           variant="outline"
           size="icon"
@@ -91,36 +98,37 @@ function AppNavbar({
           <Bell className="relative" />
         </Button>
 
-        {/* ⚠️ The dot is hardcoded — there is no unread count yet. When one
-            exists it should drive both the dot and the label, so the button
-            announces "Inbox, unread messages" rather than leaving a screen
-            reader with no idea the marker is there. */}
-        {/* The dot lives outside the button, not in it. The button clips its
-            children to draw the glass, so anything sitting on the corner was
-            being cut in half — this wrapper gives it something to hang off
-            instead. */}
-        <div className="relative">
-          <Button
-            variant="outline"
-            size="icon"
-            className="relative overflow-hidden bg-card"
-            aria-label="Inbox"
-          >
-            <LiquidGlassLayers />
-            <Inbox className="relative" />
-          </Button>
+        {/* Drawn only for an account that holds INBOX:READ. Hidden rather than
+            disabled, the same rule the admin-only menu sections follow: a button
+            that always refuses reads as something you are supposed to have and
+            cannot. The page refuses the route regardless — this only decides
+            what to draw. */}
+        {canOpenInbox && (
+          <>
+            {/* ⚠️ The dot is hardcoded — there is no unread count yet. When one
+                exists it should drive both the dot and the label, so the button
+                announces "Inbox, unread messages" rather than leaving a screen
+                reader with no idea the marker is there. */}
+            {/* The dot lives outside the button, not in it. The button clips its
+                children to draw the glass, so anything sitting on the corner was
+                being cut in half — this wrapper gives it something to hang off
+                instead. */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="icon"
+                className="relative overflow-hidden bg-card"
+                aria-label="Inbox"
+                render={<Link href="/inbox" />}
+              >
+                <LiquidGlassLayers />
+                <Inbox className="relative" />
+              </Button>
 
-          <span
-            aria-hidden
-            className="absolute -top-0.5 -right-0.5 flex size-2"
-          >
-            {/* Two dots stacked: one expanding and fading outward, one solid on
-                top. The animated ring alone would spend most of its cycle nearly
-                invisible, so the marker would appear to blink out. */}
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-destructive opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-destructive ring-2 ring-background" />
-          </span>
-        </div>
+              <NewMark className="-top-0.5 -right-0.5" />
+            </div>
+          </>
+        )}
 
         {avatar}
       </div>

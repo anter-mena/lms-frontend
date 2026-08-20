@@ -31,6 +31,7 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -78,6 +79,16 @@
      it looks like, because amber at full lightness fails contrast on white and
      these are worn as small text. */
   --warning: oklch(0.66 0.14 70);
+  /* The fourth state, and the only blue in the palette. It says "there is
+     something here" without saying anything is wrong — an unread message, a
+     link out to somewhere else.
+
+     It was a hardcoded hex on the Upgrade link before this existed, with a note
+     saying the second blue is what should turn it into a token. The unread dot
+     is that second blue. Two literals in two files are the same colour only on
+     the day they are written. Chroma is held near the other three so no state
+     shouts louder than the rest in the same row. */
+  --info: oklch(0.58 0.16 255);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -123,6 +134,8 @@
      at light-mode lightness would sit too close to the background to read. */
   --success: oklch(0.723 0.155 163);
   --warning: oklch(0.79 0.145 75);
+  /* Lifted for dark, like the two above it. */
+  --info: oklch(0.72 0.15 255);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
