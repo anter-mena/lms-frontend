@@ -75,6 +75,29 @@ export function percent(value: number, digits = 0): string {
   return `${value.toFixed(value < 10 && digits === 0 ? 1 : digits)}%`
 }
 
+/**
+ * "20 Aug 2026, 03:00" — a moment, in UTC, spelled out.
+ *
+ * <p>Fixed to UTC and to `en-GB` rather than the reader's own settings, because
+ * this renders on the server as well as in the browser: a component that formats
+ * one way in each produces markup the two disagree about, which React reports as
+ * a mismatch. Spelling the month out also removes the 05/06 ambiguity a numeric
+ * date leaves behind.
+ *
+ * <p>The zone is named wherever this appears. A server keeping time in UTC and a
+ * person reading it in Casablanca are an hour apart, and a bare "03:00" invites
+ * everybody to assume it means their own.
+ */
+export function utcStamp(iso: string): string {
+  const date = new Date(iso)
+  const month = date.toLocaleString("en-GB", { month: "short", timeZone: "UTC" })
+  const time = `${String(date.getUTCHours()).padStart(2, "0")}:${String(
+    date.getUTCMinutes()
+  ).padStart(2, "0")}`
+
+  return `${date.getUTCDate()} ${month} ${date.getUTCFullYear()}, ${time}`
+}
+
 /** Thousands separators, so 1204 does not read as 12:04. */
 export function count(value: number): string {
   return new Intl.NumberFormat("en-GB").format(Math.round(value))

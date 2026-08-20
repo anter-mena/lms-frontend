@@ -5,8 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import {
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ChevronUp,
   ChevronsUpDown,
   Ellipsis,
@@ -60,6 +58,7 @@ import {
   type UserQuery,
   type UserRow,
 } from "@/lib/userTypes"
+import { TablePagination } from "@/components/ui/tablePagination"
 import { THIN_SCROLLBAR } from "@/lib/scrollbar"
 import { cn } from "@/lib/utils"
 
@@ -111,28 +110,6 @@ const COLUMNS: { key: SortKey; label: string; centred?: boolean }[] = [
  */
 const HEAD =
   "font-mono text-[0.7rem] font-medium tracking-wider text-muted-foreground uppercase"
-
-/**
- * Which page buttons to draw: always the first and last, always the current and
- * its neighbours, with a gap standing in for whatever is skipped.
- *
- * <p>Below eight pages everything fits, so nothing is hidden — collapsing three
- * pages behind an ellipsis costs a click and saves no room.
- */
-function pageNumbers(current: number, total: number): (number | "gap")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-
-  const pages = new Set([1, total, current, current - 1, current + 1])
-  const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)
-
-  return sorted.flatMap((page, i) => {
-    const previous = sorted[i - 1]
-    // A gap only where numbers were actually skipped — never between 3 and 4.
-    return previous !== undefined && page - previous > 1
-      ? (["gap", page] as (number | "gap")[])
-      : [page]
-  })
-}
 
 /**
  * Pins the headings while the rows move under them.
@@ -595,7 +572,16 @@ function UsersTable({
                       <button
                         type="button"
                         onClick={() => toggleSort(key)}
-                        className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                        className={cn(
+                          "inline-flex items-center gap-1 transition-colors hover:text-foreground",
+                          // The column the table is actually ordered by, in the
+                          // full-strength text. It used to be marked only by the
+                          // arrow swapping shape at 12px, which is far too quiet
+                          // for the thing explaining why the rows are in the
+                          // order they are in — a list sorted by size has its
+                          // dates apparently scrambled, and nothing said why.
+                          active && "text-foreground"
+                        )}
                       >
                         {label}
                         <Icon
@@ -692,53 +678,11 @@ function UsersTable({
             : `Showing ${page.page * pageSize + 1}–${page.page * pageSize + rows.length} of ${page.totalElements}`}
         </p>
 
-        <div className="flex items-center gap-0.5">
-          <Button
-            variant="outline"
-            size="icon-xs"
-            className="rounded-md bg-card"
-            disabled={currentPage === 1}
-            onClick={() => setParam("page", String(currentPage - 1))}
-            aria-label="Previous page"
-          >
-            <ChevronLeft />
-          </Button>
-
-          {pageNumbers(currentPage, pageCount).map((entry, i) =>
-            entry === "gap" ? (
-              // Not a button: there is no single page it would take you to.
-              <span key={`gap-${i}`} className="px-0.5 text-muted-foreground">
-                …
-              </span>
-            ) : (
-              <Button
-                key={entry}
-                variant={entry === currentPage ? "default" : "outline"}
-                size="icon-xs"
-                className={cn(
-                  "rounded-md tabular-nums",
-                  entry !== currentPage && "bg-card"
-                )}
-                onClick={() => setParam("page", String(entry))}
-                aria-label={`Page ${entry}`}
-                aria-current={entry === currentPage ? "page" : undefined}
-              >
-                {entry}
-              </Button>
-            )
-          )}
-
-          <Button
-            variant="outline"
-            size="icon-xs"
-            className="rounded-md bg-card"
-            disabled={currentPage === pageCount}
-            onClick={() => setParam("page", String(currentPage + 1))}
-            aria-label="Next page"
-          >
-            <ChevronRight />
-          </Button>
-        </div>
+        <TablePagination
+          page={currentPage}
+          totalPages={pageCount}
+          onPage={(next) => setParam("page", String(next))}
+        />
       </div>
     </div>
   )

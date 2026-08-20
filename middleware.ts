@@ -62,7 +62,7 @@ const ENROL = "/two-factor"
  * a forged claim gets past this — and then gets 403 from the backend on every
  * request the screen makes. This decides which screen to build, nothing more.
  */
-const ADMIN_ONLY = ["/users", "/system-health"]
+const ADMIN_ONLY = ["/users", "/system-health", "/backups"]
 
 type Claims = { typ?: string; exp?: number; role?: string }
 

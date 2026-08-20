@@ -13,6 +13,7 @@ function Panel({
   title,
   hint,
   action,
+  footer,
   className,
   bodyClassName,
   children,
@@ -22,6 +23,15 @@ function Panel({
   hint?: React.ReactNode
   /** Sits at the right of the heading row — a filter, a count, a link. */
   action?: React.ReactNode
+  /**
+   * A strip under the card, on the tinted shell rather than inside the panel.
+   *
+   * <p>For chrome that belongs to the content without being part of it — paging,
+   * so far. On the shell deliberately, mirroring the heading row above: both
+   * frame the card rather than sitting in it, and being outside the body keeps
+   * them still while the content scrolls.
+   */
+  footer?: React.ReactNode
   className?: string
   bodyClassName?: string
   children: React.ReactNode
@@ -56,6 +66,8 @@ function Panel({
       >
         {children}
       </div>
+
+      {footer}
     </section>
   )
 }
